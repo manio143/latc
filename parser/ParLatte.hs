@@ -1143,14 +1143,14 @@ happyNewToken action sts stk (tk:tks) =
 happyError_ explist 46# tk tks = happyError' (tks, explist)
 happyError_ explist _ tk tks = happyError' ((tk:tks), explist)
 
-happyThen :: () => Err a -> (a -> Err b) -> Err b
+happyThen :: () => Either e a -> (a -> Either e b) -> Either e b
 happyThen = (thenM)
-happyReturn :: () => a -> Err a
+happyReturn :: () => a -> Either e a
 happyReturn = (returnM)
 happyThen1 m k tks = (thenM) m (\a -> k a tks)
-happyReturn1 :: () => a -> b -> Err a
+happyReturn1 :: () => a -> b -> Either e a
 happyReturn1 = \a tks -> (returnM) a
-happyError' :: () => ([(Token)], [String]) -> Err a
+happyError' :: () => ([(Token)], [String]) -> Either (String, (Int, Int)) a
 happyError' = (\(tokens, _) -> happyError tokens)
 pProgram_internal tks = happySomeParser where
  happySomeParser = happyThen (happyParse 0# tks) (\x -> happyReturn (happyOut8 x))
@@ -1158,19 +1158,20 @@ pProgram_internal tks = happySomeParser where
 happySeq = happyDontSeq
 
 
-returnM :: a -> Err a
+returnM :: a -> Either e a
 returnM = return
 
-thenM :: Err a -> (a -> Err b) -> Err b
+thenM :: Either e a -> (a -> Either e b) -> Either e b
 thenM = (>>=)
 
-happyError :: [Token] -> Err a
+happyError :: [Token] -> Either (String, (Int, Int)) a
 happyError ts =
-  Bad $ "syntax error at " ++ tokenPos ts ++ 
+  Left $ (("syntax error at " ++ (fst $ tokenPos ts) ++ 
   case ts of
-    [] -> []
-    [Err _] -> " due to lexer error"
-    t:_ -> " before `" ++ id(prToken t) ++ "'"
+    [] -> [];
+    [Err _] -> " due to lexer error";
+	t:_ -> " before `" ++ id(prToken t) ++ "'"),
+  snd $ tokenPos ts)
 
 myLexer = tokens
 

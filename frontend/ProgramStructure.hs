@@ -6,6 +6,8 @@ module ProgramStructure where
 -- e.g. here we have a BinaryOp/UnaryOp rather then
 -- specific operations like EMul/EAdd/Neg at the Expression level
 
+data Position = Position String Int Int deriving (Eq, Ord, Show)
+
 data Ident a = Ident a String deriving (Eq, Ord, Show, Read)
 
 data Program a = Program a [Definition a]
@@ -46,6 +48,7 @@ data Type a = VoidT a
             | StringT a
             | IntT a
             | ByteT a
+            | InfferedT a
             | Class a (Ident a)
             | Array a (Type a)
             | Fun a (Type a) [Type a]

@@ -12,6 +12,8 @@ import ParLatte
 import PrintLatte
 import AbsLatte
 
+import qualified ProgramStructure as S
+
 main = do
     args <- getArgs
     if length args == 0 || elem "-h" args || elem "--help" args then
@@ -34,13 +36,13 @@ parseFile file = do
     f <- readFile file
     let tokens = myLexer f
     case pProgram tokens of
-        Left ((l,c),msg) -> do
+        Left (msg,(l,c)) -> do
             let line = (if l >= 0 then last . take l else last) $ lines f
             let arrow = (replicate ((if c >= 0 then c-1 else length line)) ' ') ++ "^"
             throwIO $ ProcessError $ "Parsing error occured.\n" ++ msg ++ "\n\t" ++ line ++ "\n\t" ++ arrow
-        Right ast -> print ast >> return ast
+        Right ast -> return $ fmap (fmap (\(l,c) -> S.Position file l c)) ast
 
-concatAST = Program () . concat . map (\(Program a tds) -> tds) 
+concatAST = Program Nothing . concat . map (\(Program a tds) -> tds) 
 desugar = id --TODO
 getTypes ast = return ast --TODO
 
