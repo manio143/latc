@@ -131,9 +131,9 @@ data Token =
 printPosn :: Posn -> String
 printPosn (Pn _ l c) = "line " ++ show l ++ ", column " ++ show c
 
-tokenPos :: [Token] -> String
-tokenPos (t:_) = printPosn (tokenPosn t)
-tokenPos [] = "end of file"
+tokenPos :: [Token] -> (String, (Int, Int))
+tokenPos (t:_) = (printPosn (tokenPosn t), tokenLineCol t)
+tokenPos [] = ("end of file", (-1,-1))
 
 tokenPosn :: Token -> Posn
 tokenPosn (PT p _) = p
