@@ -3,10 +3,11 @@ module TypeChecker where
 -- This module traverses the desugared AST and checks
 -- types as well as undeclared variables.
 -- First, a list of user defined classes is computed.
--- TODO check if all referenced classes (parents, new, casts) exist
--- TODO check redeclaration of class names, functions, methods
+-- TODO check redeclaration of arguments, member names
+-- TODO (maybe in another module) check that each branching path in function has a return
 
 import Data.Maybe (fromJust)
+import Data.List (nub, (\\))
 import Control.Monad.Except hiding (void)
 import Control.Monad.Trans.Reader
 
@@ -19,8 +20,10 @@ checkTypes :: Program Position -> InnerMonad(Program Position)
 checkTypes prog@(Program pos defs) = do
     classDefs <- getClasses defs
     let classes = addBuiltInTypes $ map changeEmptyParent classDefs
+    checkRedeclarationInClasses classes
     funDefs <- getFunctions defs
     let functions = addBuiltInFunctions funDefs
+    checkRedeclarationInFunctions functions
     runReaderT (checkP prog) (classes, functions, [])
 
 data Class = Class 
@@ -45,6 +48,7 @@ getClasses ((ClassDef pos id parent decls):xs) = do
         memberOf (FieldDecl pos t id) = assureProperType t >> return (Field id t)
         memberOf (MethodDecl pos t id args _) = return . Method id t  =<< (mapM typeFromArg args)
 
+typeFromArg :: Arg Position -> InnerMonad (Type Position)
 typeFromArg (Arg pos t id) = assureProperType t >> return t
 
 assureProperType :: Type Position -> InnerMonad ()
@@ -55,6 +59,14 @@ assureProperType t =
 
 changeEmptyParent (Class id Nothing ms) = Class id (Just (name "Object")) ms
 changeEmptyParent c = c
+
+checkRedeclarationInClasses :: [Class] -> InnerMonad ()
+checkRedeclarationInClasses cls = do
+    let names = map (\(Class (Ident _ n) _ _) -> n) cls
+        duplicates = names \\ (nub names)
+    case duplicates of
+        (h:_) -> throwError ("Multiple declarations of type "++h, Undefined)
+        [] -> return ()
 
 addBuiltInTypes types = builtIn ++ types
     where
@@ -86,6 +98,14 @@ getFunctions ((FunctionDef pos t id args _):xs) = do
     f <- return . Fun id t =<< (mapM typeFromArg args)
     rest <- getFunctions xs
     return $ f : rest
+
+checkRedeclarationInFunctions :: [Function] -> InnerMonad ()
+checkRedeclarationInFunctions funs = do
+    let names = map (\(Fun (Ident _ n) _ _) -> n) funs
+        duplicates = names \\ (nub names)
+    case duplicates of
+        (h:_) -> throwError ("Multiple declarations of function "++h, Undefined)
+        [] -> return ()
 
 addBuiltInFunctions funs = builtIn ++ funs
     where
@@ -119,21 +139,32 @@ checkP (Program pos defs) = mapM checkD defs >>= return . Program pos
 
 checkD :: Definition Position -> OuterMonad (Definition Position)
 checkD (FunctionDef pos tret id args b) = do
+    checkTypeExists tret
+    mapM (lift . typeFromArg) args >>= mapM_ checkTypeExists
     checkedBody <- local (funEnv tret args) (checkB b)
     return $ FunctionDef pos tret id args checkedBody
 checkD (ClassDef pos id parent decls) = do
+    checkTypeExists (ClassT pos pid)
     checkedDecls <- local (classEnv pos id) (mapM checkM decls)
-    return $ ClassDef pos id parent checkedDecls
+    return $ ClassDef pos id (Just pid) checkedDecls
     where
         classEnv pos id (cls, funs, env) = (cls, funs, (name "$class", ClassT pos id) : (Ident pos "this", ClassT pos id) : env)
+        pid = case parent of
+                Just x -> x
+                Nothing -> let (Ident (Position f l c) s) = id in Ident (Position f l (c+length s)) "Object"
+        pos = let (Ident p _) = pid in p
 
 funEnv ret args (classes, functions, env) = (classes, functions, newenv)
     where
         newenv = (name "$ret", ret) : map fromArg args ++ env
         fromArg (Arg pos t id) = (id, t)
 
-checkM f@(FieldDecl pos t id) = return f
+checkM f@(FieldDecl pos t id) = do
+    checkTypeExists t
+    return f
 checkM (MethodDecl pos tret id args b) = do
+    checkTypeExists tret
+    mapM (lift . typeFromArg) args >>= mapM_ checkTypeExists
     checkedBody <- local (funEnv tret args) (checkB b)
     return $ MethodDecl pos tret id args checkedBody
 
@@ -162,6 +193,7 @@ checkS (VarDecl pos decls) = do
         checkDecls (d@(t, NoInit pos id):ds) = do
             checkRedeclaration id
             lift $ assureProperType t
+            checkTypeExists t
             (nds, f) <- local (addVar id t) (checkDecls ds)
             return (d:nds, f . addVar id t)
         checkDecls (d@(t, Init pos id e):ds) = do
@@ -172,6 +204,7 @@ checkS (VarDecl pos decls) = do
                                     InfferedT _ -> throw ("Type cannot be inffered from null", pos)
                                     _ -> return et
                     _ -> do
+                        checkTypeExists t
                         checkCastUp pos et t
                         return t
             (nds, f) <- local (addVar id nt) (checkDecls ds)
@@ -294,10 +327,12 @@ hierarchy classes id =
                     case m of
                         Just id' -> inner classes id' (cl:acc)
                         Nothing -> cl:acc
-        lookupH i@(Ident _ name) (c@(Class (Ident _ n) _ _):xs) =
-            if name == n then Just c
-            else lookupH i xs
-        lookupH _ [] = Nothing
+
+lookupH :: Ident Position -> [Class] -> Maybe Class
+lookupH i@(Ident _ name) (c@(Class (Ident _ n) _ _):xs) =
+    if name == n then Just c
+    else lookupH i xs
+lookupH _ [] = Nothing
 
 retrieve str = do
     (_,_,env) <- ask
@@ -305,6 +340,15 @@ retrieve str = do
     case l of
         (h:_) -> return . Just $ snd h
         [] -> return Nothing
+
+checkTypeExists :: Type Position -> OuterMonad ()
+checkTypeExists (ClassT _ id@(Ident pos n)) = do
+    (cls,_,_) <- ask
+    case lookupH id cls of
+        Just x -> return ()
+        _ -> throw ("Undeclared type "++n, pos)
+checkTypeExists (ArrayT _ t) = checkTypeExists t
+checkTypeExists _ = return ()
 
 checkE :: Expr Position -> OuterMonad (Expr Position, Type Position)
 checkE (Lit pos l@(Int _ i)) = 
@@ -359,6 +403,7 @@ checkE (App pos efun es) = do
             return (App pos nef (map fst nes), ret)
         _ -> throw ("Expected a function or a method, given"++typeName eft, pos)
 checkE (Cast pos t e) = do
+    checkTypeExists t
     (ne, et) <- checkE e
     c <- canBeCastDown et t
     if c then return (Cast pos t ne, t)
@@ -373,7 +418,8 @@ checkE (ArrAccess pos earr ein) = do
                 ByteT _ -> return (ArrAccess pos nearr (Cast pos byte nein), t)
                 _ -> throw ("Expected a numerical index, given "++typeName et, pos)
         _ -> throw ("Expected array type, given "++typeName art, pos)
-checkE (NewObj pos t m) = 
+checkE (NewObj pos t m) = do
+    checkTypeExists t
     case m of
         Nothing -> return (NewObj pos t m, t)
         Just _ -> return (NewObj pos t m, ArrayT pos t)
