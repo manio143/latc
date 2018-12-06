@@ -361,7 +361,10 @@ checkE (ArrAccess pos earr ein) = do
                 ByteT _ -> return (ArrAccess pos nearr (Cast pos byte nein), t)
                 _ -> throw ("Expected a numerical index, given "++typeName et, pos)
         _ -> throw ("Expected array type, given "++typeName art, pos)
-checkE (NewObj pos t) = return (NewObj pos t, t)
+checkE (NewObj pos t m) = 
+    case m of
+        Nothing -> return (NewObj pos t m, t)
+        Just _ -> return (NewObj pos t m, ArrayT pos t)
 checkE (Member pos e id) = do
     (ne, et) <- checkE e
     case et of

@@ -70,6 +70,7 @@ data Stmt a
     | CondElse a (Expr a) (Stmt a) (Stmt a)
     | While a (Expr a) (Stmt a)
     | SExp a (Expr a)
+    | For a (Type a) (MIdent a) (Expr a) (Stmt a)
   deriving (Eq, Ord, Show, Read)
 
 instance Functor Stmt where
@@ -86,6 +87,7 @@ instance Functor Stmt where
         CondElse a expr stmt1 stmt2 -> CondElse (f a) (fmap f expr) (fmap f stmt1) (fmap f stmt2)
         While a expr stmt -> While (f a) (fmap f expr) (fmap f stmt)
         SExp a expr -> SExp (f a) (fmap f expr)
+        For a type_ mident expr stmt -> For (f a) (fmap f type_) (fmap f mident) (fmap f expr) (fmap f stmt)
 data Item a = NoInit a (MIdent a) | Init a (MIdent a) (Expr a)
   deriving (Eq, Ord, Show, Read)
 
@@ -122,9 +124,11 @@ data Expr a
     | ELitInt a Integer
     | ELitTrue a
     | ELitFalse a
+    | ELitNull a
     | EApp a (Expr a) [Expr a]
     | EMember a (Expr a) (MIdent a)
     | ENew a (Type a)
+    | ENewArray a (Type a) Integer
     | EArr a (Expr a) (Expr a)
     | EString a String
     | Neg a (Expr a)
@@ -143,9 +147,11 @@ instance Functor Expr where
         ELitInt a integer -> ELitInt (f a) integer
         ELitTrue a -> ELitTrue (f a)
         ELitFalse a -> ELitFalse (f a)
+        ELitNull a -> ELitNull (f a)
         EApp a expr exprs -> EApp (f a) (fmap f expr) (map (fmap f) exprs)
         EMember a expr mident -> EMember (f a) (fmap f expr) (fmap f mident)
         ENew a type_ -> ENew (f a) (fmap f type_)
+        ENewArray a type_ integer -> ENewArray (f a) (fmap f type_) integer
         EArr a expr1 expr2 -> EArr (f a) (fmap f expr1) (fmap f expr2)
         EString a string -> EString (f a) string
         Neg a expr -> Neg (f a) (fmap f expr)

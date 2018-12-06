@@ -33,18 +33,19 @@ The set of reserved words is the set of terminals appearing in the grammar. Thos
 
 The reserved words used in Latte are the following:
   | ``boolean`` | ``byte`` | ``class`` | ``else``
-  | ``extends`` | ``false`` | ``if`` | ``int``
-  | ``new`` | ``return`` | ``string`` | ``true``
-  | ``var`` | ``void`` | ``while`` | 
+  | ``extends`` | ``false`` | ``for`` | ``if``
+  | ``int`` | ``new`` | ``null`` | ``return``
+  | ``string`` | ``true`` | ``var`` | ``void``
+  | ``while`` |  |  | 
 
 The symbols used in Latte are the following:
   | ( | ) | { | }
   | ; | , | = | ++
-  | -- | [] | . | [
-  | ] | - | ! | &&
-  | || | + | * | /
-  | % | < | <= | >
-  | >= | == | != | 
+  | -- | : | [] | .
+  | [ | ] | - | !
+  | && | || | + | *
+  | / | % | < | <=
+  | > | >= | == | !=
 
 ===Comments===
 Single-line comments begin with #, //.Multiple-line comments are  enclosed with /* and */.
@@ -55,18 +56,19 @@ The symbols -> (production),  **|**  (union)
 and **eps** (empty rule) belong to the BNF notation. 
 All other symbols are terminals.
 
+  | //MIdent// | -> | //Ident// 
   | //Program// | -> | //[TopDef]// 
-  | //TopDef// | -> | //Type// //Ident// ``(`` //[Arg]// ``)`` //Block// 
-  |  |  **|**  | ``class`` //Ident// //ClassExt// ``{`` //[ClMember]// ``}`` 
+  | //TopDef// | -> | //Type// //MIdent// ``(`` //[Arg]// ``)`` //Block// 
+  |  |  **|**  | ``class`` //MIdent// //ClassExt// ``{`` //[ClMember]// ``}`` 
   | //[TopDef]// | -> | //TopDef// 
   |  |  **|**  | //TopDef// //[TopDef]// 
   | //ClassExt// | -> | **eps**
-  |  |  **|**  | ``extends`` //Ident// 
-  | //ClMember// | -> | //Type// //Ident// ``;`` 
-  |  |  **|**  | //Type// //Ident// ``(`` //[Arg]// ``)`` //Block// 
+  |  |  **|**  | ``extends`` //MIdent// 
+  | //ClMember// | -> | //Type// //MIdent// ``;`` 
+  |  |  **|**  | //Type// //MIdent// ``(`` //[Arg]// ``)`` //Block// 
   | //[ClMember]// | -> | **eps**
   |  |  **|**  | //ClMember// //[ClMember]// 
-  | //Arg// | -> | //Type// //Ident// 
+  | //Arg// | -> | //Type// //MIdent// 
   | //[Arg]// | -> | **eps**
   |  |  **|**  | //Arg// 
   |  |  **|**  | //Arg// ``,`` //[Arg]// 
@@ -85,8 +87,9 @@ All other symbols are terminals.
   |  |  **|**  | ``if`` ``(`` //Expr// ``)`` //Stmt// ``else`` //Stmt// 
   |  |  **|**  | ``while`` ``(`` //Expr// ``)`` //Stmt// 
   |  |  **|**  | //Expr// ``;`` 
-  | //Item// | -> | //Ident// 
-  |  |  **|**  | //Ident// ``=`` //Expr// 
+  |  |  **|**  | ``for`` ``(`` //Type// //MIdent// ``:`` //Expr// ``)`` //Stmt// 
+  | //Item// | -> | //MIdent// 
+  |  |  **|**  | //MIdent// ``=`` //Expr// 
   | //[Item]// | -> | //Item// 
   |  |  **|**  | //Item// ``,`` //[Item]// 
   | //Type// | -> | ``int`` 
@@ -96,21 +99,24 @@ All other symbols are terminals.
   |  |  **|**  | ``var`` 
   |  |  **|**  | ``void`` 
   |  |  **|**  | //Type// ``[]`` 
-  |  |  **|**  | //Ident// 
+  |  |  **|**  | //MIdent// 
   | //[Type]// | -> | **eps**
   |  |  **|**  | //Type// 
   |  |  **|**  | //Type// ``,`` //[Type]// 
-  | //Expr7// | -> | ``(`` //Type// ``)`` //Expr// 
-  | //Expr6// | -> | //Ident// 
+  | //Expr7// | -> | ``(`` //Type// ``)`` //Expr6// 
+  |  |  **|**  | ``(`` //Expr// ``)`` 
+  | //Expr6// | -> | //MIdent// 
   |  |  **|**  | //Integer// 
   |  |  **|**  | ``true`` 
   |  |  **|**  | ``false`` 
-  |  |  **|**  | //Expr// ``(`` //[Expr]// ``)`` 
-  |  |  **|**  | //Expr// ``.`` //Ident// 
+  |  |  **|**  | ``null`` 
+  |  |  **|**  | //Expr6// ``(`` //[Expr]// ``)`` 
+  |  |  **|**  | //Expr6// ``.`` //MIdent// 
   |  |  **|**  | ``new`` //Type// 
-  |  |  **|**  | //Expr// ``[`` //Expr// ``]`` 
+  |  |  **|**  | ``new`` //Type// ``[`` //Integer// ``]`` 
+  |  |  **|**  | //Expr6// ``[`` //Expr// ``]`` 
   |  |  **|**  | //String// 
-  |  |  **|**  | ``(`` //Expr// ``)`` 
+  |  |  **|**  | //Expr7// 
   | //Expr5// | -> | ``-`` //Expr6// 
   |  |  **|**  | ``!`` //Expr6// 
   |  |  **|**  | //Expr6// 

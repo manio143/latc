@@ -64,13 +64,15 @@ data Type a = VoidT a
             | FunT a (Type a) [Type a]
   deriving (Eq, Ord, Show, Read)
 
+type Size = Integer
+
 data Expr a = Var a (Ident a)
             | Lit a (Lit a)
             | App a (Expr a) [Expr a]         -- e1(e2)
             | UnaryOp a (UnOp a) (Expr a)
             | BinaryOp a (BinOp a) (Expr a) (Expr a)
             | Member a (Expr a) (Ident a)      -- (e1).e2
-            | NewObj a (Type a)                -- new T
+            | NewObj a (Type a) (Maybe Size)               -- new T
             | ArrAccess a (Expr a) (Expr a)    -- e1[e2]
             | Cast a (Type a) (Expr a)         -- (T)e1
   deriving (Eq, Ord, Show, Read)
@@ -99,6 +101,7 @@ data BinOp a = Add a
 data Lit a = Int a Integer
            | String a String
            | Bool a Bool
+           | Null a
   deriving (Eq, Ord, Show, Read)
 
 instance Functor Ident where
@@ -153,7 +156,7 @@ instance Functor Expr where
     fmap f (UnaryOp a o e) = UnaryOp (f a) (fmap f o) (fmap f e)
     fmap f (BinaryOp a o e1 e2) = BinaryOp (f a) (fmap f o) (fmap f e1) (fmap f e2)
     fmap f (Member a e id) = Member (f a) (fmap f e) (fmap f id)
-    fmap f (NewObj a t) = NewObj (f a) (fmap f t)
+    fmap f (NewObj a t m) = NewObj (f a) (fmap f t) m
     fmap f (ArrAccess a el er) = ArrAccess (f a) (fmap f el) (fmap f er)
     fmap f (Cast a t e) = Cast (f a) (fmap f t) (fmap f e)
 
@@ -214,7 +217,7 @@ instance PrettyPrint (Stmt a) where
     printi i (Assignment _ e1 e2) = (replicate i '\t')++printi 0 e1++" = "++printi 0 e2 ++ ";"
     printi i (ReturnValue _ e) = (replicate i '\t')++"return "++printi 0 e++";"
     printi i (ReturnVoid _) = (replicate i '\t')++"return;"
-    printi i (IfElse _ e s1 s2) = (replicate i '\t')++"if ("++printi 0 e++")\n"++printi (i+1) s1 ++ "\n"++(replicate i '\t')++"else"++printi (i+1) s2
+    printi i (IfElse _ e s1 s2) = (replicate i '\t')++"if ("++printi 0 e++")\n"++printi (i+1) s1 ++ "\n"++(replicate i '\t')++"else\n"++printi (i+1) s2
     printi i (While _ e s) = (replicate i '\t')++"while ("++printi 0 e++")\n"++printi (i+1) s
     printi i (ExprStmt _ e) = (replicate i '\t')++printi 0 e ++ ";"
 
@@ -243,7 +246,10 @@ instance PrettyPrint (Expr a) where
     printi _ (UnaryOp _ (Decr _) e) = printi 0 e++"--"
     printi _ (BinaryOp _ op el er) = "("++printi 0 el ++" "++printi 0 op++" "++printi 0 er ++")"
     printi _ (Member _ e id) = printi 0 e ++"."++printi 0 id
-    printi _ (NewObj _ t) = "new "++printi 0 t
+    printi _ (NewObj _ t m) = 
+        case m of
+            Nothing -> "new "++printi 0 t
+            Just i -> "new "++printi 0 t++"["++show i++"]"
     printi _ (ArrAccess _ e1 e2) = printi 0 e1 ++"["++printi 0 e2++"]"
     printi _ (Cast _ t e) = "("++printi 0 t++")("++printi 0 e++")"
 

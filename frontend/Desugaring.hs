@@ -10,6 +10,7 @@ desugar :: A.Program a -> B.Program a
 desugar (A.Program a tds) = B.Program a (map desugarTD tds)
 
 gid (A.MIdent a (A.Ident s)) = B.Ident a s
+gid2 pref (A.MIdent a (A.Ident s)) = B.Ident a (pref++s)
 
 maybeExt (A.EmptyExt _) = Nothing
 maybeExt (A.Ext a mid) = Just $ gid mid
@@ -36,6 +37,18 @@ desugarS (A.Cond a e s1 ) = B.IfElse a (desugarE e) (desugarS s1) (B.Empty a)
 desugarS (A.CondElse a e s1 s2) = B.IfElse a (desugarE e) (desugarS s1) (desugarS s2)
 desugarS (A.While a e s) = B.While a (desugarE e) (desugarS s)
 desugarS (A.SExp a e) = B.ExprStmt a (desugarE e)
+desugarS (A.For a t mid e s) = B.BlockStmt a (B.Block a [
+    B.VarDecl a [
+        (desugarT t, B.Init a (gid2 "#" mid) (B.Lit a (B.Int a 0))), (B.InfferedT a, B.Init a (gid2 "&" mid) (desugarE e))
+        ],
+    B.While a (B.BinaryOp a (B.Lt a)
+                (B.Var a (gid2 "#" mid))
+                (B.Member a (B.Var a (gid2 "&" mid)) (B.Ident a "length")))
+              (B.BlockStmt a (B.Block a [
+                  B.VarDecl a [(desugarT t, B.Init a (gid mid) (B.ArrAccess a (B.Var a (gid2 "&" mid)) (B.Var a (gid2 "#" mid))))],
+                  desugarS s,
+                  B.ExprStmt a (B.UnaryOp a (B.Incr a) (B.Var a (gid2 "#" mid)))]
+                ))])
 
 desugarDI (A.NoInit a mid) = B.NoInit a (gid mid)
 desugarDI (A.Init a mid e) = B.Init a (gid mid) (desugarE e)
@@ -56,9 +69,11 @@ desugarE (A.EVar a mid) = B.Var a (gid mid)
 desugarE (A.ELitInt a i) = B.Lit a (B.Int a i)
 desugarE (A.ELitTrue a) = B.Lit a (B.Bool a True)
 desugarE (A.ELitFalse a) = B.Lit a (B.Bool a False)
+desugarE (A.ELitNull a) = B.Lit a (B.Null a)
 desugarE (A.EApp a e es) = B.App a (desugarE e) (map desugarE es)
 desugarE (A.EMember a e mid) = B.Member a (desugarE e) (gid mid)
-desugarE (A.ENew a t) = B.NewObj a (desugarT t)
+desugarE (A.ENew a t) = B.NewObj a (desugarT t) Nothing
+desugarE (A.ENewArray a t i) = B.NewObj a (desugarT t) (Just i)
 desugarE (A.EArr a e1 e2) = B.ArrAccess a (desugarE e1) (desugarE e2)
 desugarE (A.EString a str) = B.Lit a (B.String a str)
 desugarE (A.Neg a e) = B.UnaryOp a (B.Neg a) (desugarE e)

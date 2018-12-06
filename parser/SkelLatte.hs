@@ -50,6 +50,7 @@ transStmt x = case x of
   CondElse _ expr stmt1 stmt2 -> failure x
   While _ expr stmt -> failure x
   SExp _ expr -> failure x
+  For _ type_ mident expr stmt -> failure x
 transItem :: Show a => Item a -> Result
 transItem x = case x of
   NoInit _ mident -> failure x
@@ -72,9 +73,11 @@ transExpr x = case x of
   ELitInt _ integer -> failure x
   ELitTrue _ -> failure x
   ELitFalse _ -> failure x
+  ELitNull _ -> failure x
   EApp _ expr exprs -> failure x
   EMember _ expr mident -> failure x
   ENew _ type_ -> failure x
+  ENewArray _ type_ integer -> failure x
   EArr _ expr1 expr2 -> failure x
   EString _ string -> failure x
   Neg _ expr -> failure x
