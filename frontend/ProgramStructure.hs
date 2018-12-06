@@ -197,18 +197,18 @@ instance PrettyPrint (Ident a) where
     printi _ (Ident _ s) = s
 
 instance PrettyPrint (Definition a) where
-    printi _ (FunctionDef _ t id args b) = printi 0 t ++ " " ++ printi 0 id ++ "(" ++ intercalate ", " (map (printi 0) args) ++ ")" ++ printi 1 b
+    printi _ (FunctionDef _ t id args b) = printi 0 t ++ " " ++ printi 0 id ++ "(" ++ intercalate ", " (map (printi 0) args) ++ ")\n" ++ printi 1 b
     printi _ (ClassDef _ id mpar decls) = "class " ++ printi 0 id ++ fromMaybe "" (fmap (\i -> " extends "++printi 0 i) mpar) ++ "\n{\n" ++ intercalate "\n" (map (printi 1) decls) ++"\n}"
 
 instance PrettyPrint (Block a) where
-    printi i (Block _ stmts) = "\n"++(replicate (i-1) '\t')++"{\n" ++ intercalate "\n" (map (printi i) stmts) ++ "\n"++(replicate (i-1) '\t')++"}"
+    printi i (Block _ stmts) = (replicate (i-1) '\t')++"{\n" ++ intercalate "\n" (map (printi i) stmts) ++ "\n"++(replicate (i-1) '\t')++"}"
     
 instance PrettyPrint (Arg a) where
     printi _ (Arg _ t id) = printi 0 t ++ " " ++ printi 0 id
 
 instance PrettyPrint (ClassDecl a) where
     printi i (FieldDecl _ t id) = (replicate i '\t')++printi 0 t ++ " " ++ printi 0 id ++ ";"
-    printi i (MethodDecl _ t id args b) = (replicate i '\t')++printi 0 t ++ " " ++ printi 0 id ++ "(" ++ intercalate ", " (map (printi 0) args) ++ ")" ++ printi (i+1) b
+    printi i (MethodDecl _ t id args b) = (replicate i '\t')++printi 0 t ++ " " ++ printi 0 id ++ "(" ++ intercalate ", " (map (printi 0) args) ++ ")\n" ++ printi (i+1) b
 
 instance PrettyPrint (Stmt a) where
     printi i (Empty _) = (replicate i '\t')++";"
@@ -271,5 +271,5 @@ instance PrettyPrint (BinOp a) where
 instance PrettyPrint (Lit a) where
     printi _ (Int _ i) = show i
     printi _ (String _ s) = show s
-    printi _ (Bool _ b) = show b
+    printi _ (Bool _ b) = if b then "true" else "false"
 
