@@ -270,6 +270,7 @@ instance PrettyPrint (BinOp a) where
 
 instance PrettyPrint (Lit a) where
     printi _ (Int _ i) = show i
-    printi _ (String _ s) = show s
+    printi _ (String _ s) = s
     printi _ (Bool _ b) = if b then "true" else "false"
+    printi _ (Null _) = "null"
 

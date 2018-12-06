@@ -168,7 +168,9 @@ checkS (VarDecl pos decls) = do
             checkRedeclaration id
             (ne, et) <- checkE e
             nt <- case t of
-                    InfferedT _ -> return et
+                    InfferedT _ -> case et of
+                                    InfferedT _ -> throw ("Type cannot be inffered from null", pos)
+                                    _ -> return et
                     _ -> do
                         checkCastUp pos et t
                         return t
@@ -262,6 +264,9 @@ canBeCastUp tFrom tTo = do
             cs <- mapM (\(t1, t2) -> canBeCastUp t1 t2) (zip ts1 ts2)
             return (all (== True) (t:cs))
         (InfferedT _, _) -> return True -- only when checking Expr.App
+        (StringT _, InfferedT _) -> return True -- only when casting null
+        (ClassT _ _, InfferedT _) -> return True -- only when casting null
+        (ArrayT _ _, InfferedT _) -> return True -- only when casting null
         _ -> return False
     where
         isParent classes idSon idPar = do
@@ -308,6 +313,7 @@ checkE (Lit pos l@(Int _ i)) =
     else throw ("Constant exceeds the size of int", pos)
 checkE (Lit pos l@(String _ _)) = return (Lit pos l, StringT pos)
 checkE (Lit pos l@(Bool _ _)) = return (Lit pos l, BoolT pos)
+checkE (Lit pos l@(Null _)) = return (Lit pos l, InfferedT pos)
 checkE (Var pos id) = do
     mv <- getVar id
     case mv of
