@@ -173,7 +173,7 @@ checkS (VarDecl pos decls) = do
                         checkCastUp pos et t
                         return t
             (nds, f) <- local (addVar id nt) (checkDecls ds)
-            return (d:nds, f . addVar id nt)
+            return ((nt, Init pos id ne):nds, f . addVar id nt)
         checkDecls [] = return ([], id)
 checkS (Assignment pos ase e) = do
     (nase, aset) <- checkE ase
@@ -256,6 +256,7 @@ canBeCastUp tFrom tTo = do
         (ClassT _ (Ident _ "String"), StringT _) -> return True
         (ClassT _ idSon, ClassT _ idPar) -> if idSon == idPar then return True
                                           else isParent classes idSon idPar
+        (ArrayT _ t1, ArrayT _ t2) -> equivalentType t1 t2
         (FunT _ t1 ts1, FunT _ t2 ts2) -> do
             t <- canBeCastUp t1 t2
             cs <- mapM (\(t1, t2) -> canBeCastUp t1 t2) (zip ts1 ts2)
@@ -273,6 +274,11 @@ canBeCastUp tFrom tTo = do
         elemH _ [] = return False
 
 canBeCastDown tFrom tTo = canBeCastUp tTo tFrom
+
+equivalentType t1 t2 = do
+    a <- canBeCastUp t1 t2
+    b <- canBeCastDown t1 t2
+    return (a && b)
 
 hierarchy classes id =
     inner classes id []
