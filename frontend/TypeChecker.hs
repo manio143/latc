@@ -108,13 +108,7 @@ string = StringT BuiltIn
 array = ArrayT BuiltIn
 class_ s = ClassT BuiltIn (name s)
 
-typeName (VoidT a) = "void"
-typeName (BoolT a) = "bool"
-typeName (StringT a) = "string"
-typeName (IntT a) = "int"
-typeName (ByteT a) = "byte"
-typeName (ArrayT a t) = typeName t ++ "[]"
-typeName (ClassT a (Ident b name)) = name
+typeName t = printi 0 t
 
 throw = lift . throwError
 
@@ -226,7 +220,7 @@ checkS (ExprStmt pos e) = do
 checkCastUp pos tFrom tTo = do
     c <- canBeCastUp tFrom tTo 
     if c then return ()
-    else throw ("Cannot convert " ++ typeName tFrom ++ " to type "++typeName tTo, pos)
+    else throw ("Cannot convert " ++ typeName tFrom ++ " to "++typeName tTo, pos)
 
 checkRedeclaration :: Ident Position -> OuterMonad ()
 checkRedeclaration (Ident pos name) = do
@@ -257,6 +251,7 @@ canBeCastUp tFrom tTo = do
         (BoolT _, BoolT _) -> return True
         (StringT _, StringT _) -> return True
         (VoidT _, VoidT _) -> return True
+        (ByteT _, IntT _) -> return True
         (StringT _, ClassT _ (Ident _ "String")) -> return True
         (ClassT _ (Ident _ "String"), StringT _) -> return True
         (ClassT _ idSon, ClassT _ idPar) -> if idSon == idPar then return True
@@ -386,10 +381,18 @@ checkE (UnaryOp pos op e) = do
         (Not _, BoolT _) -> return (UnaryOp pos op ne, et)
         (Neg _, IntT _) -> return (UnaryOp pos op ne, et)
         (Neg _, ByteT _) -> return (UnaryOp pos op ne, et)
-        (Incr _, IntT _) -> return (UnaryOp pos op ne, et)
-        (Incr _, ByteT _) -> return (UnaryOp pos op ne, et)
-        (Decr _, IntT _) -> return (UnaryOp pos op ne, et)
-        (Decr _, ByteT _) -> return (UnaryOp pos op ne, et)
+        (Incr _, IntT _) -> do
+            checkEisLValue pos ne
+            return (UnaryOp pos op ne, et)
+        (Incr _, ByteT _) -> do
+            checkEisLValue pos ne
+            return (UnaryOp pos op ne, et)
+        (Decr _, IntT _) -> do
+            checkEisLValue pos ne
+            return (UnaryOp pos op ne, et)
+        (Decr _, ByteT _) -> do
+            checkEisLValue pos ne
+            return (UnaryOp pos op ne, et)
         (Not _, _) -> throw ("Expected boolean expression, given "++typeName et, pos)
         _ -> throw ("Expected a number, given "++typeName et, pos)
 checkE (BinaryOp pos op el er) = do

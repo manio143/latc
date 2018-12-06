@@ -6,6 +6,9 @@ module ProgramStructure where
 -- e.g. here we have a BinaryOp/UnaryOp rather then
 -- specific operations like EMul/EAdd/Neg at the Expression level
 
+import Data.List (intercalate)
+import Data.Maybe (fromMaybe)
+
 data Position = Position String Int Int 
               | BuiltIn
               | Undefined
@@ -180,4 +183,87 @@ instance Functor Lit where
     fmap f (String a s) = String (f a) s
     fmap f (Bool a b) = Bool (f a) b
 
+
+class PrettyPrint x where
+    printi :: Int -> x -> String 
+
+instance PrettyPrint (Program a) where
+    printi _ (Program _ defs) = intercalate "\n\n" (map (printi 0) defs)
+
+instance PrettyPrint (Ident a) where
+    printi _ (Ident _ s) = s
+
+instance PrettyPrint (Definition a) where
+    printi _ (FunctionDef _ t id args b) = printi 0 t ++ " " ++ printi 0 id ++ "(" ++ intercalate ", " (map (printi 0) args) ++ ")" ++ printi 1 b
+    printi _ (ClassDef _ id mpar decls) = "class " ++ printi 0 id ++ fromMaybe "" (fmap (\i -> " extends "++printi 0 i) mpar) ++ "\n{\n" ++ intercalate "\n" (map (printi 1) decls) ++"\n}"
+
+instance PrettyPrint (Block a) where
+    printi i (Block _ stmts) = "\n"++(replicate (i-1) '\t')++"{\n" ++ intercalate "\n" (map (printi i) stmts) ++ "\n"++(replicate (i-1) '\t')++"}"
+    
+instance PrettyPrint (Arg a) where
+    printi _ (Arg _ t id) = printi 0 t ++ " " ++ printi 0 id
+
+instance PrettyPrint (ClassDecl a) where
+    printi i (FieldDecl _ t id) = (replicate i '\t')++printi 0 t ++ " " ++ printi 0 id ++ ";"
+    printi i (MethodDecl _ t id args b) = (replicate i '\t')++printi 0 t ++ " " ++ printi 0 id ++ "(" ++ intercalate ", " (map (printi 0) args) ++ ")" ++ printi (i+1) b
+
+instance PrettyPrint (Stmt a) where
+    printi i (Empty _) = (replicate i '\t')++";"
+    printi i (BlockStmt _ b) = printi (i+1) b
+    printi i (VarDecl _ decls) = intercalate "\n" (map (\(t, d) -> (replicate i '\t')++printi 0 t ++ " " ++ printi 0 d ++ ";") decls)
+    printi i (Assignment _ e1 e2) = (replicate i '\t')++printi 0 e1++" = "++printi 0 e2 ++ ";"
+    printi i (ReturnValue _ e) = (replicate i '\t')++"return "++printi 0 e++";"
+    printi i (ReturnVoid _) = (replicate i '\t')++"return;"
+    printi i (IfElse _ e s1 s2) = (replicate i '\t')++"if ("++printi 0 e++")\n"++printi (i+1) s1 ++ "\n"++(replicate i '\t')++"else"++printi (i+1) s2
+    printi i (While _ e s) = (replicate i '\t')++"while ("++printi 0 e++")\n"++printi (i+1) s
+    printi i (ExprStmt _ e) = (replicate i '\t')++printi 0 e ++ ";"
+
+instance PrettyPrint (DeclItem a) where
+    printi _ (NoInit _ id) = printi 0 id
+    printi _ (Init _ id e) = printi 0 id ++ " = "++ printi 0 e
+
+instance PrettyPrint (Type a) where
+    printi _ (VoidT _) = "void"
+    printi _ (IntT _) = "int"
+    printi _ (ByteT _) = "byte"
+    printi _ (StringT _) = "string"
+    printi _ (BoolT _) = "bool"
+    printi _ (InfferedT _) = "var"
+    printi _ (ClassT _ id) = printi 0 id
+    printi _ (ArrayT _ t) = printi 0 t ++ "[]"
+    printi _ (FunT _ t ts) = "("++printi 0 t++" -> ("++intercalate ", " (map (printi 0) ts) ++"))"
+
+instance PrettyPrint (Expr a) where
+    printi _ (Var _ id) = printi 0 id
+    printi _ (Lit _ l) = printi 0 l
+    printi _ (App _ e es) = printi 0 e ++ "("++intercalate ", " (map (printi 0) es)++")"
+    printi _ (UnaryOp _ (Neg _) e) = "-"++printi 0 e
+    printi _ (UnaryOp _ (Not _) e) = "!"++printi 0 e
+    printi _ (UnaryOp _ (Incr _) e) = printi 0 e++"++"
+    printi _ (UnaryOp _ (Decr _) e) = printi 0 e++"--"
+    printi _ (BinaryOp _ op el er) = "("++printi 0 el ++" "++printi 0 op++" "++printi 0 er ++")"
+    printi _ (Member _ e id) = printi 0 e ++"."++printi 0 id
+    printi _ (NewObj _ t) = "new "++printi 0 t
+    printi _ (ArrAccess _ e1 e2) = printi 0 e1 ++"["++printi 0 e2++"]"
+    printi _ (Cast _ t e) = "("++printi 0 t++")("++printi 0 e++")"
+
+instance PrettyPrint (BinOp a) where
+    printi _ (Add _) = "+"
+    printi _ (Sub _) = "-"
+    printi _ (Mul _) = "*"
+    printi _ (Div _) = "/"
+    printi _ (Mod _) = "%"
+    printi _ (Lt _) = "<"
+    printi _ (Le _) = "<="
+    printi _ (Equ _) = "=="
+    printi _ (Neq _) = "!="
+    printi _ (Gt _) = ">"
+    printi _ (Ge _) = ">="
+    printi _ (And _) = "&&"
+    printi _ (Or _) = "||"
+
+instance PrettyPrint (Lit a) where
+    printi _ (Int _ i) = show i
+    printi _ (String _ s) = show s
+    printi _ (Bool _ b) = show b
 

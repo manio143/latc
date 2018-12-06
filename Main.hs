@@ -35,7 +35,7 @@ process args = do
         mast = runExcept (checkTypes ast)
     case mast of 
         Left err -> reportError err
-        Right ast -> print ast
+        Right ast -> putStrLn (S.printi 0 ast)
 
 parseFile file = do
     f <- readFile file
