@@ -5,6 +5,7 @@ import System.IO
 import System.Environment ( getArgs, getProgName )
 import System.Exit ( exitFailure, exitSuccess )
 import Control.Exception
+import Control.Monad.Except (runExcept)
 import Data.Typeable
 
 import LexLatte
@@ -13,6 +14,8 @@ import PrintLatte
 import AbsLatte
 
 import qualified ProgramStructure as S
+import Desugaring
+import TypeChecker
 
 main = do
     args <- getArgs
@@ -29,8 +32,10 @@ displayHelp = do
 process args = do
     progs <- mapM parseFile args >>= return . concatAST
     let ast = desugar progs
-    declTypes <- getTypes ast
-    return ()
+        mast = runExcept (checkTypes ast)
+    case mast of 
+        Left err -> reportError err
+        Right ast -> print ast
 
 parseFile file = do
     f <- readFile file
@@ -40,11 +45,18 @@ parseFile file = do
             let line = (if l >= 0 then last . take l else last) $ lines f
             let arrow = (replicate ((if c >= 0 then c-1 else length line)) ' ') ++ "^"
             throwIO $ ProcessError $ "Parsing error occured.\n" ++ msg ++ "\n\t" ++ line ++ "\n\t" ++ arrow
-        Right ast -> return $ fmap (fmap (\(l,c) -> S.Position file l c)) ast
+        Right ast -> return $ fmap ((\(Just (l,c)) -> S.Position file l c)) ast
 
-concatAST = Program Nothing . concat . map (\(Program a tds) -> tds) 
-desugar = id --TODO
-getTypes ast = return ast --TODO
+concatAST = Program S.Undefined . concat . map (\(Program a tds) -> tds) 
 
 data ProcessError = ProcessError String deriving (Show, Typeable)
 instance Exception ProcessError
+
+reportError (msg, position) = do
+    case position of
+        p@(S.Position file l c) -> do
+            f <- readFile file
+            let line = (if l >= 0 then last . take l else last) $ lines f
+            let arrow = (replicate ((if c >= 0 then c-1 else length line)) ' ') ++ "^"
+            throwIO $ ProcessError $ "Error occured.\n" ++ msg ++ "\nat "++show p ++"\n\n\t" ++ line ++ "\n\t" ++ arrow
+        _ -> throwIO $ ProcessError $ "Error occured.\n" ++ msg

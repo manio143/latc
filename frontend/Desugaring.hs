@@ -26,13 +26,13 @@ desugarB (A.Block a stmts) = B.Block a (map desugarS stmts)
 
 desugarS (A.Empty a) = B.Empty a
 desugarS (A.BStmt a b) = B.BlockStmt a (desugarB b)
-desugarS (A.Decl a t is) = B.VarDecl a (desugarT t) (map desugarDI is)
+desugarS (A.Decl a t is) = B.VarDecl a (map (\i -> (desugarT t, desugarDI i)) is)
 desugarS (A.Ass a e1 e2) = B.Assignment a (desugarE e1) (desugarE e2)
 desugarS (A.Incr a e) = B.ExprStmt a (B.UnaryOp a (B.Incr a) (desugarE e))
 desugarS (A.Decr a e) = B.ExprStmt a (B.UnaryOp a (B.Decr a) (desugarE e))
 desugarS (A.Ret a e) = B.ReturnValue a (desugarE e)
 desugarS (A.VRet a) = B.ReturnVoid a
-desugarS (A.Cond a e s1 ) = B.If a (desugarE e) (desugarS s1)
+desugarS (A.Cond a e s1 ) = B.IfElse a (desugarE e) (desugarS s1) (B.Empty a)
 desugarS (A.CondElse a e s1 s2) = B.IfElse a (desugarE e) (desugarS s1) (desugarS s2)
 desugarS (A.While a e s) = B.While a (desugarE e) (desugarS s)
 desugarS (A.SExp a e) = B.ExprStmt a (desugarE e)
@@ -46,9 +46,9 @@ desugarT (A.Bool a) = B.BoolT a
 desugarT (A.Byte a) = B.ByteT a
 desugarT (A.Var a) = B.InfferedT a
 desugarT (A.Void a) = B.VoidT a
-desugarT (A.Array a t) = B.Array a (desugarT t)
-desugarT (A.Class a mid) = B.Class a (gid mid)
-desugarT (A.Fun a t ts) = B.Fun a (desugarT t) (map desugarT ts)
+desugarT (A.Array a t) = B.ArrayT a (desugarT t)
+desugarT (A.Class a mid) = B.ClassT a (gid mid)
+desugarT (A.Fun a t ts) = B.FunT a (desugarT t) (map desugarT ts)
 
 desugarE :: A.Expr a -> B.Expr a
 desugarE (A.ECast a t e) = B.Cast a (desugarT t) (desugarE e)

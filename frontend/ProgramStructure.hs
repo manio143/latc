@@ -6,7 +6,15 @@ module ProgramStructure where
 -- e.g. here we have a BinaryOp/UnaryOp rather then
 -- specific operations like EMul/EAdd/Neg at the Expression level
 
-data Position = Position String Int Int deriving (Eq, Ord, Show)
+data Position = Position String Int Int 
+              | BuiltIn
+              | Undefined
+  deriving (Eq, Ord)
+
+instance Show Position where
+    show (Position file line col) = "\""++file++"\", line: "++ show line++", column: "++show col
+    show BuiltIn = "inside standard library"
+    show Undefined = "(undefined)"
 
 data Ident a = Ident a String deriving (Eq, Ord, Show, Read)
 
@@ -29,11 +37,10 @@ data ClassDecl a = FieldDecl a (Type a) (Ident a)
 
 data Stmt a = Empty a
             | BlockStmt a (Block a)
-            | VarDecl a (Type a) [DeclItem a]
+            | VarDecl a [(Type a, DeclItem a)]
             | Assignment a (Expr a) (Expr a)
             | ReturnValue a (Expr a)
             | ReturnVoid a
-            | If a (Expr a) (Stmt a)
             | IfElse a (Expr a) (Stmt a) (Stmt a)
             | While a (Expr a) (Stmt a)
             | ExprStmt a (Expr a)
@@ -49,9 +56,9 @@ data Type a = VoidT a
             | IntT a
             | ByteT a
             | InfferedT a
-            | Class a (Ident a)
-            | Array a (Type a)
-            | Fun a (Type a) [Type a]
+            | ClassT a (Ident a)
+            | ArrayT a (Type a)
+            | FunT a (Type a) [Type a]
   deriving (Eq, Ord, Show, Read)
 
 data Expr a = Var a (Ident a)
@@ -114,11 +121,10 @@ instance Functor ClassDecl where
 instance Functor Stmt where
     fmap f (Empty a) = Empty (f a)
     fmap f (BlockStmt a b) = BlockStmt (f a) (fmap f b)
-    fmap f (VarDecl a t ds) = VarDecl (f a) (fmap f t) (fmap (fmap f) ds)
+    fmap f (VarDecl a ds) = VarDecl (f a) (fmap (\(a,b) -> (fmap f a, fmap f b)) ds)
     fmap f (Assignment a e ex) = Assignment (f a) (fmap f e) (fmap f ex)
     fmap f (ReturnValue a ex) = ReturnValue (f a) (fmap f ex)
     fmap f (ReturnVoid a) = ReturnVoid (f a)
-    fmap f (If a ex s) = If (f a) (fmap f ex) (fmap f s)
     fmap f (IfElse a ex s1 s2) = IfElse (f a) (fmap f ex) (fmap f s1) (fmap f s2)
     fmap f (While a ex s) = While (f a) (fmap f ex) (fmap f s)
     fmap f (ExprStmt a ex) = ExprStmt (f a) (fmap f ex)
@@ -133,9 +139,9 @@ instance Functor Type where
     fmap f (StringT a) = StringT (f a)
     fmap f (IntT a) = IntT (f a)
     fmap f (ByteT a) = ByteT (f a)
-    fmap f (Class a id) = Class (f a) (fmap f id)
-    fmap f (Array a t) = Array (f a) (fmap f t)
-    fmap f (Fun a t ts) = Fun (f a) (fmap f t) (fmap (fmap f) ts)
+    fmap f (ClassT a id) = ClassT (f a) (fmap f id)
+    fmap f (ArrayT a t) = ArrayT (f a) (fmap f t)
+    fmap f (FunT a t ts) = FunT (f a) (fmap f t) (fmap (fmap f) ts)
 
 instance Functor Expr where
     fmap f (Var a id) = Var (f a) (fmap f id)
