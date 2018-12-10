@@ -143,21 +143,14 @@ instance Print (Item a) where
   prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])
 instance Print (Type a) where
   prt i e = case e of
-    Int _ -> prPrec i 0 (concatD [doc (showString "int")])
-    Str _ -> prPrec i 0 (concatD [doc (showString "string")])
-    Bool _ -> prPrec i 0 (concatD [doc (showString "boolean")])
-    Byte _ -> prPrec i 0 (concatD [doc (showString "byte")])
     Var _ -> prPrec i 0 (concatD [doc (showString "var")])
     Void _ -> prPrec i 0 (concatD [doc (showString "void")])
     Array _ type_ -> prPrec i 0 (concatD [prt 0 type_, doc (showString "[]")])
     Class _ mident -> prPrec i 0 (concatD [prt 0 mident])
-    Fun _ type_ types -> prPrec i 0 (concatD [prt 0 type_, doc (showString "("), prt 0 types, doc (showString ")")])
-  prtList _ [] = (concatD [])
-  prtList _ [x] = (concatD [prt 0 x])
-  prtList _ (x:xs) = (concatD [prt 0 x, doc (showString ","), prt 0 xs])
+
 instance Print (Expr a) where
   prt i e = case e of
-    ECast _ type_ expr -> prPrec i 7 (concatD [doc (showString "("), prt 0 type_, doc (showString ")"), prt 6 expr])
+    ECast _ mident expr -> prPrec i 7 (concatD [doc (showString "("), prt 0 mident, doc (showString ")"), prt 6 expr])
     EVar _ mident -> prPrec i 6 (concatD [prt 0 mident])
     ELitInt _ n -> prPrec i 6 (concatD [prt 0 n])
     ELitTrue _ -> prPrec i 6 (concatD [doc (showString "true")])
@@ -166,7 +159,7 @@ instance Print (Expr a) where
     EApp _ expr exprs -> prPrec i 6 (concatD [prt 6 expr, doc (showString "("), prt 0 exprs, doc (showString ")")])
     EMember _ expr mident -> prPrec i 6 (concatD [prt 6 expr, doc (showString "."), prt 0 mident])
     ENew _ type_ -> prPrec i 6 (concatD [doc (showString "new"), prt 0 type_])
-    ENewArray _ type_ n -> prPrec i 6 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 n, doc (showString "]")])
+    ENewArray _ type_ expr -> prPrec i 6 (concatD [doc (showString "new"), prt 0 type_, doc (showString "["), prt 0 expr, doc (showString "]")])
     EArr _ expr1 expr2 -> prPrec i 6 (concatD [prt 6 expr1, doc (showString "["), prt 0 expr2, doc (showString "]")])
     EString _ str -> prPrec i 6 (concatD [prt 0 str])
     Neg _ expr -> prPrec i 5 (concatD [doc (showString "-"), prt 6 expr])

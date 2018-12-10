@@ -3,11 +3,10 @@ module TypeChecker where
 -- This module traverses the desugared AST and checks
 -- types as well as undeclared variables.
 -- First, a list of user defined classes is computed.
--- TODO check redeclaration of arguments, member names
 -- TODO (maybe in another module) check that each branching path in function has a return
 
 import Data.Maybe (fromJust)
-import Data.List (nub, (\\))
+import Data.List (nub, (\\), sort)
 import Control.Monad.Except hiding (void)
 import Control.Monad.Trans.Reader
 
@@ -30,10 +29,10 @@ data Class = Class
                 {-name-}(Ident Position) 
                 {-parent-}(Maybe (Ident Position))
                 {-members-}[Member]
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 data Member = Field (Ident Position) (Type Position)
             | Method (Ident Position) (Type Position) [Type Position]
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 data Function  = Fun (Ident Position) (Type Position) [Type Position]
     deriving (Eq, Show)
 
@@ -60,13 +59,58 @@ assureProperType t =
 changeEmptyParent (Class id Nothing ms) = Class id (Just (name "Object")) ms
 changeEmptyParent c = c
 
+duplicates :: (Ord a, Ord b) => [(a, b)] -> [(a,b)]
+duplicates list = walk (sort list) []
+    where
+        walk [] acc = acc
+        walk [_] acc = acc
+        walk ((x,y):(a,b):rest) acc | x == a = walk ((x,y):rest) ((a,b):acc)
+                                    | otherwise = walk ((a,b):rest) acc
+
 checkRedeclarationInClasses :: [Class] -> InnerMonad ()
 checkRedeclarationInClasses cls = do
-    let names = map (\(Class (Ident _ n) _ _) -> n) cls
-        duplicates = names \\ (nub names)
-    case duplicates of
-        (h:_) -> throwError ("Multiple declarations of type "++h, Undefined)
+    -- Class duplicates
+    let names = map (\c@(Class (Ident _ n) _ _) -> (n,c)) cls
+        dups = duplicates (names)
+    case dups of
+        ((n,(Class (Ident p _) _ _)):_) -> throwError ("Multiple declarations of type "++n, p)
         [] -> return ()
+    -- Member duplicates within a class
+    let memberNames = map (\(Class _ _ mems) -> map (\m -> (memberName m, m)) mems) cls
+        dupsM = map duplicates memberNames
+    mapM_ throwOnDuplicates dupsM
+    -- Type check of same name methods in parents
+    let members = map (membersUpTree cls) cls
+    mapM_ (checkInheritedMemberTypes cls) members
+    where
+        membersUpTree cls (Class _ par mems) =
+            let localMemberNames = map (\m -> (memberName m, m)) mems
+                mparentClass = fmap (findClass cls) par
+            in case mparentClass of
+                Nothing -> localMemberNames
+                Just parentClass -> localMemberNames ++ membersUpTree cls parentClass
+        memberName (Field (Ident _ n) _) = n
+        memberName (Method (Ident _ n) _ _) = n
+        memberPos (Field (Ident p _) _) = p
+        memberPos (Method (Ident p _) _ _) = p
+        findClass cls (Ident _ n) = head $ filter (\(Class (Ident _ nn) _ _) -> n == nn) cls
+        throwOnDuplicates :: [(String, Member)] -> InnerMonad ()
+        throwOnDuplicates ds =
+            case ds of
+                ((n,m):_) -> throwError ("Multiple declarations of member "++n, memberPos m)
+                [] -> return ()
+        checkInheritedMemberTypes cls members = walk $ sort members
+            where
+                walk ((a,Field (Ident p _) _):(b, Field (Ident p2 _) _):r) | a == b = throwError ("Redeclaration of field "++a++".\nAlready declared here: "++show p2, p)
+                walk ((a, Field (Ident p _) _):(b, Method _ _ _):r) | a == b = throwError ("Method with name "++a++" already exists in a parent class", p)
+                walk ((a, Method (Ident p _) _ _):(b, Field _ _):r) | a == b = throwError ("Field with name "++a++" already exists in a parent class", p)
+                walk ((a, Method (Ident p _) t1 t2):bb@(b, Method _ tt1 tt2):r) | a == b = do
+                    cond <- tcanBeCastUp cls (FunT Undefined t1 t2) (FunT Undefined tt1 tt2)
+                    if cond then walk (bb:r)
+                    else throwError ("Method "++a++" has an incompatible type with overriden method in a parent class", p)
+                walk (_:r) = walk r
+                walk [] = return ()
+
 
 addBuiltInTypes types = builtIn ++ types
     where
@@ -114,6 +158,7 @@ addBuiltInFunctions funs = builtIn ++ funs
                 Fun (name "printInt") void [int],
                 Fun (name "printByte") void [byte],
                 Fun (name "printBool") void [bool],
+                Fun (name "print") void [object],
                 Fun (name "error") void [],
                 Fun (name "readInt") int [],
                 Fun (name "readString") string []
@@ -126,6 +171,7 @@ byte = ByteT BuiltIn
 name = Ident BuiltIn
 string = StringT BuiltIn
 array = ArrayT BuiltIn
+object = class_ "Object"
 class_ s = ClassT BuiltIn (name s)
 
 typeName t = printi 0 t
@@ -141,6 +187,7 @@ checkD :: Definition Position -> OuterMonad (Definition Position)
 checkD (FunctionDef pos tret id args b) = do
     checkTypeExists tret
     mapM (lift . typeFromArg) args >>= mapM_ checkTypeExists
+    checkArgsRedeclaration args
     checkedBody <- local (funEnv tret args) (checkB b)
     return $ FunctionDef pos tret id args checkedBody
 checkD (ClassDef pos id parent decls) = do
@@ -156,7 +203,7 @@ checkD (ClassDef pos id parent decls) = do
 
 funEnv ret args (classes, functions, env) = (classes, functions, newenv)
     where
-        newenv = (name "$ret", ret) : map fromArg args ++ env
+        newenv = map fromArg args ++ (name "$ret", ret) : env
         fromArg (Arg pos t id) = (id, t)
 
 checkM f@(FieldDecl pos t id) = do
@@ -165,8 +212,17 @@ checkM f@(FieldDecl pos t id) = do
 checkM (MethodDecl pos tret id args b) = do
     checkTypeExists tret
     mapM (lift . typeFromArg) args >>= mapM_ checkTypeExists
+    checkArgsRedeclaration args
     checkedBody <- local (funEnv tret args) (checkB b)
     return $ MethodDecl pos tret id args checkedBody
+
+checkArgsRedeclaration :: [Arg Position] -> OuterMonad ()
+checkArgsRedeclaration args = do
+    let argNames = map (\(Arg _ _ (Ident p n))->(n,p)) args
+        argNameCheck = duplicates argNames
+    case argNameCheck of
+        [] -> return ()
+        (n,p):_ -> throw ("Redeclaration of argument of name "++n, p)
 
 checkB :: Block Position -> OuterMonad (Block Position)
 checkB (Block pos stmts) = do
@@ -278,8 +334,13 @@ checkThis pos name = do
             Just _ -> throw ("Illegal shadowing of this inside a class", pos)
     else return ()
 
+-- can be cast implicitly
+canBeCastUp :: Type Position -> Type Position -> OuterMonad Bool
 canBeCastUp tFrom tTo = do
     (classes, _, _) <- ask
+    lift $ tcanBeCastUp classes tFrom tTo
+
+tcanBeCastUp classes tFrom tTo = do
     case (tFrom, tTo) of
         (IntT _, IntT _) -> return True
         (ByteT _, ByteT _) -> return True
@@ -291,31 +352,42 @@ canBeCastUp tFrom tTo = do
         (ClassT _ (Ident _ "String"), StringT _) -> return True
         (ClassT _ idSon, ClassT _ idPar) -> if idSon == idPar then return True
                                           else isParent classes idSon idPar
-        (ArrayT _ t1, ArrayT _ t2) -> equivalentType t1 t2
+        (ArrayT _ t1, ArrayT _ t2) -> equivalentType classes t1 t2
         (FunT _ t1 ts1, FunT _ t2 ts2) -> do
-            t <- canBeCastUp t1 t2
-            cs <- mapM (\(t1, t2) -> canBeCastUp t1 t2) (zip ts1 ts2)
+            t <- tcanBeCastUp classes t1 t2
+            cs <- mapM (\(t1, t2) -> tcanBeCastUp classes t1 t2) (zip ts1 ts2)
             return (all (== True) (t:cs))
         (InfferedT _, _) -> return True -- only when checking Expr.App
         (StringT _, InfferedT _) -> return True -- only when casting null
         (ClassT _ _, InfferedT _) -> return True -- only when casting null
         (ArrayT _ _, InfferedT _) -> return True -- only when casting null
         _ -> return False
-    where
-        isParent classes idSon idPar = do
-            let h = hierarchy classes idSon
-                h' = map (\(Class id _ _) -> id) h
-            elemH idPar h'
-        elemH id@(Ident _ n1) ((Ident _ n2):xs) =
-            if n1 == n2 then return True
-            else elemH id xs
-        elemH _ [] = return False
 
-canBeCastDown tFrom tTo = canBeCastUp tTo tFrom
+isParent :: [Class] -> Ident Position -> Ident Position -> InnerMonad Bool
+isParent classes idSon idPar = do
+    let h = hierarchy classes idSon
+        h' = map (\(Class id _ _) -> id) h
+    elemH idPar h'
+  where
+    elemH id@(Ident _ n1) ((Ident _ n2):xs) =
+        if n1 == n2 then return True
+        else elemH id xs
+    elemH _ [] = return False
 
-equivalentType t1 t2 = do
-    a <- canBeCastUp t1 t2
-    b <- canBeCastDown t1 t2
+canBeCastDown tFrom tTo = 
+    case (tFrom, tTo) of
+        (IntT _, ByteT _) -> return True
+        (ByteT _, IntT _) -> return True
+        (ClassT _ idFrom, ClassT _ idTo) -> do
+            (classes, _, _) <- ask
+            b1 <- lift $ isParent classes idTo idFrom
+            b2 <- lift $ isParent classes idFrom idTo
+            return (b1 || b2)
+        _ -> canBeCastUp tTo tFrom
+
+equivalentType cls t1 t2 = do
+    a <- tcanBeCastUp cls t1 t2
+    b <- tcanBeCastUp cls t2 t1
     return (a && b)
 
 hierarchy classes id =
@@ -404,10 +476,13 @@ checkE (App pos efun es) = do
         _ -> throw ("Expected a function or a method, given"++typeName eft, pos)
 checkE (Cast pos t e) = do
     checkTypeExists t
-    (ne, et) <- checkE e
-    c <- canBeCastDown et t
-    if c then return (Cast pos t ne, t)
-    else throw ("Illegal cast of "++typeName et++" to "++typeName t, pos)
+    case t of
+        InfferedT _ -> throw ("Invalid type in cast expression", pos)
+        _ -> do
+            (ne, et) <- checkE e
+            c <- canBeCastDown et t
+            if c then return (Cast pos t ne, t)
+            else throw ("Illegal cast of "++typeName et++" to "++typeName t, pos)
 checkE (ArrAccess pos earr ein) = do
     (nearr, art) <- checkE earr
     case art of
@@ -415,14 +490,18 @@ checkE (ArrAccess pos earr ein) = do
             (nein, et) <- checkE ein
             case et of
                 IntT _ -> return (ArrAccess pos nearr nein, t)
-                ByteT _ -> return (ArrAccess pos nearr (Cast pos byte nein), t)
+                ByteT _ -> return (ArrAccess pos nearr (Cast pos int nein), t)
                 _ -> throw ("Expected a numerical index, given "++typeName et, pos)
         _ -> throw ("Expected array type, given "++typeName art, pos)
 checkE (NewObj pos t m) = do
     checkTypeExists t
     case m of
         Nothing -> return (NewObj pos t m, t)
-        Just _ -> return (NewObj pos t m, ArrayT pos t)
+        Just e -> do
+            (ne, et) <- checkE e
+            b <- canBeCastUp et int
+            if b then return (NewObj pos t (Just ne), ArrayT pos t)
+            else throw ("Expected a numerical size in array constructor, given "++typeName et, pos)
 checkE (Member pos e id) = do
     (ne, et) <- checkE e
     case et of

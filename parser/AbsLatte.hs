@@ -96,30 +96,17 @@ instance Functor Item where
         NoInit a mident -> NoInit (f a) (fmap f mident)
         Init a mident expr -> Init (f a) (fmap f mident) (fmap f expr)
 data Type a
-    = Int a
-    | Str a
-    | Bool a
-    | Byte a
-    | Var a
-    | Void a
-    | Array a (Type a)
-    | Class a (MIdent a)
-    | Fun a (Type a) [Type a]
+    = Var a | Void a | Array a (Type a) | Class a (MIdent a)
   deriving (Eq, Ord, Show, Read)
 
 instance Functor Type where
     fmap f x = case x of
-        Int a -> Int (f a)
-        Str a -> Str (f a)
-        Bool a -> Bool (f a)
-        Byte a -> Byte (f a)
         Var a -> Var (f a)
         Void a -> Void (f a)
         Array a type_ -> Array (f a) (fmap f type_)
         Class a mident -> Class (f a) (fmap f mident)
-        Fun a type_ types -> Fun (f a) (fmap f type_) (map (fmap f) types)
 data Expr a
-    = ECast a (Type a) (Expr a)
+    = ECast a (MIdent a) (Expr a)
     | EVar a (MIdent a)
     | ELitInt a Integer
     | ELitTrue a
@@ -128,7 +115,7 @@ data Expr a
     | EApp a (Expr a) [Expr a]
     | EMember a (Expr a) (MIdent a)
     | ENew a (Type a)
-    | ENewArray a (Type a) Integer
+    | ENewArray a (Type a) (Expr a)
     | EArr a (Expr a) (Expr a)
     | EString a String
     | Neg a (Expr a)
@@ -142,7 +129,7 @@ data Expr a
 
 instance Functor Expr where
     fmap f x = case x of
-        ECast a type_ expr -> ECast (f a) (fmap f type_) (fmap f expr)
+        ECast a mident expr -> ECast (f a) (fmap f mident) (fmap f expr)
         EVar a mident -> EVar (f a) (fmap f mident)
         ELitInt a integer -> ELitInt (f a) integer
         ELitTrue a -> ELitTrue (f a)
@@ -151,7 +138,7 @@ instance Functor Expr where
         EApp a expr exprs -> EApp (f a) (fmap f expr) (map (fmap f) exprs)
         EMember a expr mident -> EMember (f a) (fmap f expr) (fmap f mident)
         ENew a type_ -> ENew (f a) (fmap f type_)
-        ENewArray a type_ integer -> ENewArray (f a) (fmap f type_) integer
+        ENewArray a type_ expr -> ENewArray (f a) (fmap f type_) (fmap f expr)
         EArr a expr1 expr2 -> EArr (f a) (fmap f expr1) (fmap f expr2)
         EString a string -> EString (f a) string
         Neg a expr -> Neg (f a) (fmap f expr)

@@ -57,18 +57,13 @@ transItem x = case x of
   Init _ mident expr -> failure x
 transType :: Show a => Type a -> Result
 transType x = case x of
-  Int _ -> failure x
-  Str _ -> failure x
-  Bool _ -> failure x
-  Byte _ -> failure x
   Var _ -> failure x
   Void _ -> failure x
   Array _ type_ -> failure x
   Class _ mident -> failure x
-  Fun _ type_ types -> failure x
 transExpr :: Show a => Expr a -> Result
 transExpr x = case x of
-  ECast _ type_ expr -> failure x
+  ECast _ mident expr -> failure x
   EVar _ mident -> failure x
   ELitInt _ integer -> failure x
   ELitTrue _ -> failure x
@@ -77,7 +72,7 @@ transExpr x = case x of
   EApp _ expr exprs -> failure x
   EMember _ expr mident -> failure x
   ENew _ type_ -> failure x
-  ENewArray _ type_ integer -> failure x
+  ENewArray _ type_ expr -> failure x
   EArr _ expr1 expr2 -> failure x
   EString _ string -> failure x
   Neg _ expr -> failure x

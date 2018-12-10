@@ -64,13 +64,13 @@ For.       Stmt ::= "for" "(" Type MIdent ":" Expr ")" Stmt ;
 
 -- Types ---------------------------------------------------
 
-Int.       Type ::= "int" ;
+--Int.       Type ::= "int" ;
 
-Str.       Type ::= "string" ;
+--Str.       Type ::= "string" ;
 
-Bool.      Type ::= "boolean" ;
+--Bool.      Type ::= "boolean" ;
 
-Byte.      Type ::= "byte" ;
+--Byte.      Type ::= "byte" ;
 
 Var.       Type ::= "var" ;
 
@@ -80,13 +80,13 @@ Array.     Type ::= Type "[]" ;
 
 Class.     Type ::= MIdent ;
 
-internal   Fun. Type ::= Type "(" [Type] ")" ;
+--internal   Fun. Type ::= Type "(" [Type] ")" ;
 
-separator  Type "," ;
+--separator  Type "," ;
 
 -- Expressions ---------------------------------------------
 
-ECast.     Expr7 ::= "(" Type ")" Expr6 ;
+ECast.     Expr7 ::= "(" MIdent ")" Expr6 ;
 
 EVar.      Expr6 ::= MIdent ;
 
@@ -104,7 +104,7 @@ EMember.   Expr6 ::= Expr6 "." MIdent ;
 
 ENew.      Expr6 ::= "new" Type ;
 
-ENewArray. Expr6 ::= "new" Type "[" Integer "]" ;
+ENewArray. Expr6 ::= "new" Type "[" Expr "]" ;
 
 EArr.      Expr6 ::= Expr6 "[" Expr "]" ;
 

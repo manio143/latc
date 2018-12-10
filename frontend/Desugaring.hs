@@ -53,18 +53,13 @@ desugarS (A.For a t mid e s) = B.BlockStmt a (B.Block a [
 desugarDI (A.NoInit a mid) = B.NoInit a (gid mid)
 desugarDI (A.Init a mid e) = B.Init a (gid mid) (desugarE e)
 
-desugarT (A.Int a) = B.IntT a
-desugarT (A.Str a) = B.StringT a
-desugarT (A.Bool a) = B.BoolT a
-desugarT (A.Byte a) = B.ByteT a
 desugarT (A.Var a) = B.InfferedT a
 desugarT (A.Void a) = B.VoidT a
 desugarT (A.Array a t) = B.ArrayT a (desugarT t)
-desugarT (A.Class a mid) = B.ClassT a (gid mid)
-desugarT (A.Fun a t ts) = B.FunT a (desugarT t) (map desugarT ts)
+desugarT (A.Class a mid) = typeFromMid mid
 
 desugarE :: A.Expr a -> B.Expr a
-desugarE (A.ECast a t e) = B.Cast a (desugarT t) (desugarE e)
+desugarE (A.ECast a mid e) = B.Cast a (typeFromMid mid) (desugarE e)
 desugarE (A.EVar a mid) = B.Var a (gid mid)
 desugarE (A.ELitInt a i) = B.Lit a (B.Int a i)
 desugarE (A.ELitTrue a) = B.Lit a (B.Bool a True)
@@ -73,7 +68,7 @@ desugarE (A.ELitNull a) = B.Lit a (B.Null a)
 desugarE (A.EApp a e es) = B.App a (desugarE e) (map desugarE es)
 desugarE (A.EMember a e mid) = B.Member a (desugarE e) (gid mid)
 desugarE (A.ENew a t) = B.NewObj a (desugarT t) Nothing
-desugarE (A.ENewArray a t i) = B.NewObj a (desugarT t) (Just i)
+desugarE (A.ENewArray a t e) = B.NewObj a (desugarT t) (Just $ desugarE e)
 desugarE (A.EArr a e1 e2) = B.ArrAccess a (desugarE e1) (desugarE e2)
 desugarE (A.EString a str) = B.Lit a (B.String a str)
 desugarE (A.Neg a e) = B.UnaryOp a (B.Neg a) (desugarE e)
@@ -93,3 +88,13 @@ desugarCmp (A.LE a) = B.Le a
 desugarCmp (A.GE a) = B.Ge a
 desugarCmp (A.EQU a) = B.Equ a
 desugarCmp (A.NE a) = B.Neq a
+
+typeFromMid (A.MIdent a (A.Ident s)) =
+    case s of
+        "int" -> B.IntT a
+        "var" -> B.InfferedT a
+        "void" -> B.VoidT a
+        "byte" -> B.ByteT a
+        "string" -> B.StringT a
+        "boolean" -> B.BoolT a
+        _ -> B.ClassT a (B.Ident a s)

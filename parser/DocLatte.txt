@@ -32,10 +32,9 @@ except ``"`` unless preceded by ``\``.
 The set of reserved words is the set of terminals appearing in the grammar. Those reserved words that consist of non-letter characters are called symbols, and they are treated in a different way from those that are similar to identifiers. The lexer follows rules familiar from languages like Haskell, C, and Java, including longest match and spacing conventions.
 
 The reserved words used in Latte are the following:
-  | ``boolean`` | ``byte`` | ``class`` | ``else``
-  | ``extends`` | ``false`` | ``for`` | ``if``
-  | ``int`` | ``new`` | ``null`` | ``return``
-  | ``string`` | ``true`` | ``var`` | ``void``
+  | ``class`` | ``else`` | ``extends`` | ``false``
+  | ``for`` | ``if`` | ``new`` | ``null``
+  | ``return`` | ``true`` | ``var`` | ``void``
   | ``while`` |  |  | 
 
 The symbols used in Latte are the following:
@@ -92,18 +91,11 @@ All other symbols are terminals.
   |  |  **|**  | //MIdent// ``=`` //Expr// 
   | //[Item]// | -> | //Item// 
   |  |  **|**  | //Item// ``,`` //[Item]// 
-  | //Type// | -> | ``int`` 
-  |  |  **|**  | ``string`` 
-  |  |  **|**  | ``boolean`` 
-  |  |  **|**  | ``byte`` 
-  |  |  **|**  | ``var`` 
+  | //Type// | -> | ``var`` 
   |  |  **|**  | ``void`` 
   |  |  **|**  | //Type// ``[]`` 
   |  |  **|**  | //MIdent// 
-  | //[Type]// | -> | **eps**
-  |  |  **|**  | //Type// 
-  |  |  **|**  | //Type// ``,`` //[Type]// 
-  | //Expr7// | -> | ``(`` //Type// ``)`` //Expr6// 
+  | //Expr7// | -> | ``(`` //MIdent// ``)`` //Expr6// 
   |  |  **|**  | ``(`` //Expr// ``)`` 
   | //Expr6// | -> | //MIdent// 
   |  |  **|**  | //Integer// 
@@ -113,7 +105,7 @@ All other symbols are terminals.
   |  |  **|**  | //Expr6// ``(`` //[Expr]// ``)`` 
   |  |  **|**  | //Expr6// ``.`` //MIdent// 
   |  |  **|**  | ``new`` //Type// 
-  |  |  **|**  | ``new`` //Type// ``[`` //Integer// ``]`` 
+  |  |  **|**  | ``new`` //Type// ``[`` //Expr// ``]`` 
   |  |  **|**  | //Expr6// ``[`` //Expr// ``]`` 
   |  |  **|**  | //String// 
   |  |  **|**  | //Expr7// 

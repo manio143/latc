@@ -64,15 +64,13 @@ data Type a = VoidT a
             | FunT a (Type a) [Type a]
   deriving (Eq, Ord, Show, Read)
 
-type Size = Integer
-
 data Expr a = Var a (Ident a)
             | Lit a (Lit a)
             | App a (Expr a) [Expr a]         -- e1(e2)
             | UnaryOp a (UnOp a) (Expr a)
             | BinaryOp a (BinOp a) (Expr a) (Expr a)
             | Member a (Expr a) (Ident a)      -- (e1).e2
-            | NewObj a (Type a) (Maybe Size)               -- new T
+            | NewObj a (Type a) (Maybe (Expr a))               -- new T
             | ArrAccess a (Expr a) (Expr a)    -- e1[e2]
             | Cast a (Type a) (Expr a)         -- (T)e1
   deriving (Eq, Ord, Show, Read)
@@ -156,7 +154,7 @@ instance Functor Expr where
     fmap f (UnaryOp a o e) = UnaryOp (f a) (fmap f o) (fmap f e)
     fmap f (BinaryOp a o e1 e2) = BinaryOp (f a) (fmap f o) (fmap f e1) (fmap f e2)
     fmap f (Member a e id) = Member (f a) (fmap f e) (fmap f id)
-    fmap f (NewObj a t m) = NewObj (f a) (fmap f t) m
+    fmap f (NewObj a t m) = NewObj (f a) (fmap f t) (fmap (fmap f) m)
     fmap f (ArrAccess a el er) = ArrAccess (f a) (fmap f el) (fmap f er)
     fmap f (Cast a t e) = Cast (f a) (fmap f t) (fmap f e)
 
@@ -249,7 +247,7 @@ instance PrettyPrint (Expr a) where
     printi _ (NewObj _ t m) = 
         case m of
             Nothing -> "new "++printi 0 t
-            Just i -> "new "++printi 0 t++"["++show i++"]"
+            Just e -> "new "++printi 0 t++"["++printi 0 e++"]"
     printi _ (ArrAccess _ e1 e2) = printi 0 e1 ++"["++printi 0 e2++"]"
     printi _ (Cast _ t e) = "("++printi 0 t++")("++printi 0 e++")"
 

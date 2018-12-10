@@ -38,26 +38,22 @@ import ErrM
   '[' { PT _ (TS _ 23) }
   '[]' { PT _ (TS _ 24) }
   ']' { PT _ (TS _ 25) }
-  'boolean' { PT _ (TS _ 26) }
-  'byte' { PT _ (TS _ 27) }
-  'class' { PT _ (TS _ 28) }
-  'else' { PT _ (TS _ 29) }
-  'extends' { PT _ (TS _ 30) }
-  'false' { PT _ (TS _ 31) }
-  'for' { PT _ (TS _ 32) }
-  'if' { PT _ (TS _ 33) }
-  'int' { PT _ (TS _ 34) }
-  'new' { PT _ (TS _ 35) }
-  'null' { PT _ (TS _ 36) }
-  'return' { PT _ (TS _ 37) }
-  'string' { PT _ (TS _ 38) }
-  'true' { PT _ (TS _ 39) }
-  'var' { PT _ (TS _ 40) }
-  'void' { PT _ (TS _ 41) }
-  'while' { PT _ (TS _ 42) }
-  '{' { PT _ (TS _ 43) }
-  '||' { PT _ (TS _ 44) }
-  '}' { PT _ (TS _ 45) }
+  'class' { PT _ (TS _ 26) }
+  'else' { PT _ (TS _ 27) }
+  'extends' { PT _ (TS _ 28) }
+  'false' { PT _ (TS _ 29) }
+  'for' { PT _ (TS _ 30) }
+  'if' { PT _ (TS _ 31) }
+  'new' { PT _ (TS _ 32) }
+  'null' { PT _ (TS _ 33) }
+  'return' { PT _ (TS _ 34) }
+  'true' { PT _ (TS _ 35) }
+  'var' { PT _ (TS _ 36) }
+  'void' { PT _ (TS _ 37) }
+  'while' { PT _ (TS _ 38) }
+  '{' { PT _ (TS _ 39) }
+  '||' { PT _ (TS _ 40) }
+  '}' { PT _ (TS _ 41) }
 
   L_ident {PT _ (TV _)}
   L_integ {PT _ (TI _)}
@@ -253,19 +249,7 @@ ListItem :: {
 Type :: {
   (Maybe (Int, Int), Type (Maybe (Int, Int)))
 }
-: 'int' {
-  (Just (tokenLineCol $1), AbsLatte.Int (Just (tokenLineCol $1)))
-}
-| 'string' {
-  (Just (tokenLineCol $1), AbsLatte.Str (Just (tokenLineCol $1)))
-}
-| 'boolean' {
-  (Just (tokenLineCol $1), AbsLatte.Bool (Just (tokenLineCol $1)))
-}
-| 'byte' {
-  (Just (tokenLineCol $1), AbsLatte.Byte (Just (tokenLineCol $1)))
-}
-| 'var' {
+: 'var' {
   (Just (tokenLineCol $1), AbsLatte.Var (Just (tokenLineCol $1)))
 }
 | 'void' {
@@ -278,23 +262,10 @@ Type :: {
   (fst $1, AbsLatte.Class (fst $1)(snd $1)) 
 }
 
-ListType :: {
-  (Maybe (Int, Int), [Type (Maybe (Int, Int))]) 
-}
-: {
-  (Nothing, [])
-}
-| Type {
-  (fst $1, (:[]) (snd $1)) 
-}
-| Type ',' ListType {
-  (fst $1, (:) (snd $1)(snd $3)) 
-}
-
 Expr7 :: {
   (Maybe (Int, Int), Expr (Maybe (Int, Int)))
 }
-: '(' Type ')' Expr6 {
+: '(' MIdent ')' Expr6 {
   (Just (tokenLineCol $1), AbsLatte.ECast (Just (tokenLineCol $1)) (snd $2)(snd $4)) 
 }
 | '(' Expr ')' {
@@ -328,7 +299,7 @@ Expr6 :: {
 | 'new' Type {
   (Just (tokenLineCol $1), AbsLatte.ENew (Just (tokenLineCol $1)) (snd $2)) 
 }
-| 'new' Type '[' Integer ']' {
+| 'new' Type '[' Expr ']' {
   (Just (tokenLineCol $1), AbsLatte.ENewArray (Just (tokenLineCol $1)) (snd $2)(snd $4)) 
 }
 | Expr6 '[' Expr ']' {
