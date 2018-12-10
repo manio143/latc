@@ -538,7 +538,7 @@ checkE (UnaryOp pos op e) = do
 checkE (BinaryOp pos op el er) = do
     (nel, elt) <- checkE el
     (ner, ert) <- checkE er
-    let err = throw ("Invalid operands' types", pos)
+    let err = throw ("Incompatible operands' types: "++typeName elt++" and "++typeName ert, pos)
     case (op, elt, ert) of
         (Add _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, elt)
         (Add _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, elt)
@@ -596,10 +596,10 @@ checkE (BinaryOp pos op el er) = do
         (Neq _, StringT _, ClassT _ (Ident _ "String")) -> return (BinaryOp pos op nel ner, bool)
         (Neq _, StringT _, StringT _) -> return (BinaryOp pos op nel ner, bool)
         (Neq _, BoolT _, BoolT _) -> return (BinaryOp pos op nel ner, bool)
-        (Equ _, ClassT _ a, ClassT _ b) -> 
+        (Equ _, ClassT _ (Ident _ a), ClassT _ (Ident _ b)) -> 
             if a == b then return (BinaryOp pos op nel ner, bool)
             else err
-        (Neq _, ClassT _ a, ClassT _ b) -> 
+        (Neq _, ClassT _ (Ident _ a), ClassT _ (Ident _ b)) -> 
             if a == b then return (BinaryOp pos op nel ner, bool)
             else err
         (And _, BoolT _, BoolT _) -> return (BinaryOp pos op nel ner, elt)
