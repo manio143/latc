@@ -622,5 +622,18 @@ getMemberType classId (Ident _ n) = do
 
 checkEisLValue pos (ArrAccess _ _ _) = return ()
 checkEisLValue pos (Var _ _) = return ()
-checkEisLValue pos (Member _ _ _) = return ()
+checkEisLValue pos (Member _ e (Ident _ n)) = do
+    (_, ClassT _ id) <- checkE e
+    (cls,_,_) <- ask
+    let h = hierarchy cls id
+        members = concat $ map (\(Class _ _ mems) -> mems) h
+    if field members n then return ()
+    else throw ("Illegal assignment to a method", pos)
+    where
+        field ((Field (Ident _ k) _):r) n = 
+            if k == n then True
+            else field r n
+        field ((Method (Ident _ k) _ _):r) n =
+            if k == n then False
+            else field r n
 checkEisLValue pos _ = throw ("Expected an lvalue", pos)
