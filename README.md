@@ -3,7 +3,7 @@
 ## Kompilacja i uruchomienie
 
     make
-    latc_frontend file.lat
+    ./latc_frontend file.lat
 
 ## Frontend
 Na chwilę obecną mam zrobione:
@@ -28,7 +28,7 @@ Dodatkowo
 - typy primitywne to `int`, `bool` i `byte`
 
 ### Krok po kroku
-Wygenerowałem parser na podstawie gramatyki BNFC (plik `parser/Latte.cf`). Po sparsowaniu pliku, zostaje on poddany procesowi odsładzania (desugaring) w wyniku którego otrzymuję moją własną strukturę AST.
+Wygenerowałem parser na podstawie gramatyki BNFC (plik `src/parser/Latte.cf`). Po sparsowaniu pliku, zostaje on poddany procesowi odsładzania (desugaring) w wyniku którego otrzymuję moją własną strukturę AST.
 
 Następnie na tej strukturze przeprowadzane jest sprawdzanie typów i redeklaracji klas/funkcji. Jego wynikiem jest zaktualizowane AST (m.in. odwołania do pól i metod dostają explicite `this.`, wszelkie występowania `var` są zastępowane właściwym typem).
 
