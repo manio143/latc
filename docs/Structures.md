@@ -8,8 +8,9 @@ Tak wygląda struktura referencji:
 
     struct Reference {
         Type* type;
-        int counter;
         void* data;
+        int counter;
+        char[] padding = {0,0,0,0};
     }
 
 ## Tablice
@@ -17,18 +18,21 @@ W przypadku tablic, pole `type` w referencji wskazuje na ogólny typ `Array`, z 
 
     struct RefArray {
         char arrM = 0x01;
+        char[] padding = {0,0,0};
         int size;
         Reference* elements;
     }
 
     struct IntArray {
         char arrM = 0x02;
+        char[] padding = {0,0,0};
         int size;
         int* elements;
     }
 
     struct ByteArray {
         char arrM = 0x03;
+        char[] padding = {0,0,0};
         int size;
         char* elements;
     }
@@ -41,6 +45,7 @@ Klasa opisuje strukturę fragmentu pamięci obiektu oraz funkcje, które można 
     struct Type {
         parent Type*;
         int dataSize;
+        char[] padding = {0,0,0,0};
         void* methods;
     }
 
@@ -70,7 +75,7 @@ Kiedy dziedziczymy po pewnej klasie to nasze pola są dopisywane na końcu, podo
     class Object {
         boolean equals(Object other);
         int getHashCode();
-        Type getType();
+        string toString();
     }
 
     class Array extends Object {

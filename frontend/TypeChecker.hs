@@ -399,6 +399,7 @@ hierarchy classes id =
                     case m of
                         Just id' -> inner classes id' (cl:acc)
                         Nothing -> cl:acc
+                Nothing -> error $ "Class '"++show id++"' not found"
 
 lookupH :: Ident Position -> [Class] -> Maybe Class
 lookupH i@(Ident _ name) (c@(Class (Ident _ n) _ _):xs) =
@@ -437,10 +438,10 @@ checkE (Var pos id) = do
         Nothing -> do
             mc <- getClass
             case mc of
-                Just (ClassT _ idc) -> do
+                Just (ClassT _ idc@(Ident _ clsName)) -> do
                     mm <- getMemberType idc id
                     case mm of
-                        Just t -> return (Member pos (Var pos (Ident pos "this")) id, t)
+                        Just t -> return (Member pos (Var pos (Ident pos "this")) id (Just clsName), t)
                         Nothing -> do
                             mf <- getFun id
                             case mf of
@@ -502,7 +503,7 @@ checkE (NewObj pos t m) = do
             b <- canBeCastUp et int
             if b then return (NewObj pos t (Just ne), ArrayT pos t)
             else throw ("Expected a numerical size in array constructor, given "++typeName et, pos)
-checkE (Member pos e id) = do
+checkE (Member pos e id _) = do
     (ne, et) <- checkE e
     case et of
         StringT _ -> cont pos ne id (name "String")
@@ -510,10 +511,10 @@ checkE (Member pos e id) = do
         ClassT _ name -> cont pos ne id name
         _ -> throw ("Expected an object, given "++typeName et, pos)
     where
-        cont pos e id@(Ident p i) cls = do
+        cont pos e id@(Ident p i) cls@(Ident _ clsName) = do
             mem <- getMemberType cls id
             case mem of
-                Just t -> return (Member pos e id, t)
+                Just t -> return (Member pos e id (Just clsName), t)
                 Nothing -> throw ("Undefined member "++i, p)
 checkE (UnaryOp pos op e) = do
     (ne, et) <- checkE e
@@ -622,10 +623,9 @@ getMemberType classId (Ident _ n) = do
 
 checkEisLValue pos (ArrAccess _ _ _) = return ()
 checkEisLValue pos (Var _ _) = return ()
-checkEisLValue pos (Member _ e (Ident _ n)) = do
-    (_, ClassT _ id) <- checkE e
+checkEisLValue pos (Member _ e (Ident _ n) (Just clsName)) = do
     (cls,_,_) <- ask
-    let h = hierarchy cls id
+    let h = hierarchy cls (Ident Undefined clsName)
         members = concat $ map (\(Class _ _ mems) -> mems) h
     if field members n then return ()
     else throw ("Illegal assignment to a method", pos)
@@ -636,4 +636,5 @@ checkEisLValue pos (Member _ e (Ident _ n)) = do
         field ((Method (Ident _ k) _ _):r) n =
             if k == n then False
             else field r n
+        field [] n = False
 checkEisLValue pos _ = throw ("Expected an lvalue", pos)

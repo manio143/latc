@@ -69,11 +69,13 @@ data Expr a = Var a (Ident a)
             | App a (Expr a) [Expr a]         -- e1(e2)
             | UnaryOp a (UnOp a) (Expr a)
             | BinaryOp a (BinOp a) (Expr a) (Expr a)
-            | Member a (Expr a) (Ident a)      -- (e1).e2
+            | Member a (Expr a) (Ident a) (Maybe TypeName)      -- (e1).e2
             | NewObj a (Type a) (Maybe (Expr a))               -- new T
             | ArrAccess a (Expr a) (Expr a)    -- e1[e2]
             | Cast a (Type a) (Expr a)         -- (T)e1
   deriving (Eq, Ord, Show, Read)
+
+type TypeName = String
 
 data UnOp a = Neg a   --  -
             | Not a   --  !
@@ -153,7 +155,7 @@ instance Functor Expr where
     fmap f (App a e es) = App (f a) (fmap f e) (fmap (fmap f) es)
     fmap f (UnaryOp a o e) = UnaryOp (f a) (fmap f o) (fmap f e)
     fmap f (BinaryOp a o e1 e2) = BinaryOp (f a) (fmap f o) (fmap f e1) (fmap f e2)
-    fmap f (Member a e id) = Member (f a) (fmap f e) (fmap f id)
+    fmap f (Member a e id m) = Member (f a) (fmap f e) (fmap f id) m
     fmap f (NewObj a t m) = NewObj (f a) (fmap f t) (fmap (fmap f) m)
     fmap f (ArrAccess a el er) = ArrAccess (f a) (fmap f el) (fmap f er)
     fmap f (Cast a t e) = Cast (f a) (fmap f t) (fmap f e)
@@ -243,7 +245,7 @@ instance PrettyPrint (Expr a) where
     printi _ (UnaryOp _ (Incr _) e) = printi 0 e++"++"
     printi _ (UnaryOp _ (Decr _) e) = printi 0 e++"--"
     printi _ (BinaryOp _ op el er) = "("++printi 0 el ++" "++printi 0 op++" "++printi 0 er ++")"
-    printi _ (Member _ e id) = printi 0 e ++"."++printi 0 id
+    printi _ (Member _ e id _) = printi 0 e ++"."++printi 0 id
     printi _ (NewObj _ t m) = 
         case m of
             Nothing -> "new "++printi 0 t

@@ -43,7 +43,7 @@ desugarS (A.For a t mid e s) = B.BlockStmt a (B.Block a [
         ],
     B.While a (B.BinaryOp a (B.Lt a)
                 (B.Var a (gid2 "n__" mid))
-                (B.Member a (B.Var a (gid2 "a__" mid)) (B.Ident a "length")))
+                (B.Member a (B.Var a (gid2 "a__" mid)) (B.Ident a "length") Nothing))
               (B.BlockStmt a (B.Block a [
                   B.VarDecl a [(desugarT t, B.Init a (gid mid) (B.ArrAccess a (B.Var a (gid2 "a__" mid)) (B.Var a (gid2 "n__" mid))))],
                   desugarS s,
@@ -66,7 +66,7 @@ desugarE (A.ELitTrue a) = B.Lit a (B.Bool a True)
 desugarE (A.ELitFalse a) = B.Lit a (B.Bool a False)
 desugarE (A.ELitNull a) = B.Lit a (B.Null a)
 desugarE (A.EApp a e es) = B.App a (desugarE e) (map desugarE es)
-desugarE (A.EMember a e mid) = B.Member a (desugarE e) (gid mid)
+desugarE (A.EMember a e mid) = B.Member a (desugarE e) (gid mid) Nothing
 desugarE (A.ENew a t) = B.NewObj a (desugarT t) Nothing
 desugarE (A.ENewArray a t e) = B.NewObj a (desugarT t) (Just $ desugarE e)
 desugarE (A.EArr a e1 e2) = B.ArrAccess a (desugarE e1) (desugarE e2)
