@@ -16,6 +16,7 @@ import AbsLatte
 import qualified ProgramStructure as S
 import Desugaring
 import TypeChecker
+import ReturnChecker
 
 main = do
     args <- getArgs
@@ -32,8 +33,9 @@ displayHelp = do
 process args = do
     progs <- mapM parseFile args >>= return . concatAST
     let ast = desugar progs
-        mast = runExcept (checkTypes ast)
-    case mast of 
+        passOne = checkTypes ast
+        passTwo = passOne >>= checkReturnPaths
+    case runExcept passTwo of 
         Left err -> reportError err
         Right ast -> putStrLn (S.printi 0 ast)
 

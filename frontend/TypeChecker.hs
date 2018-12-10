@@ -1,4 +1,4 @@
-module TypeChecker where
+module TypeChecker (checkTypes) where
 
 -- This module traverses the desugared AST and checks
 -- types as well as undeclared variables.
@@ -157,7 +157,7 @@ addBuiltInFunctions funs = builtIn ++ funs
                 Fun (name "printString") void [string],
                 Fun (name "printInt") void [int],
                 Fun (name "printByte") void [byte],
-                Fun (name "printBool") void [bool],
+                Fun (name "printBoolean") void [bool],
                 Fun (name "print") void [object],
                 Fun (name "error") void [],
                 Fun (name "readInt") int [],
