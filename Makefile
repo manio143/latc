@@ -1,2 +1,2 @@
 all:
-	ghc --make -iparser:frontend:backend Main.hs
+	ghc --make -isrc/parser:src/frontend:src/backend src/Main.hs
