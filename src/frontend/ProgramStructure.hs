@@ -79,8 +79,6 @@ type TypeName = String
 
 data UnOp a = Neg a   --  -
             | Not a   --  !
-            | Incr a  --  ++
-            | Decr a  --  --
   deriving (Eq, Ord, Show, Read)
 
 data BinOp a = Add a
@@ -163,8 +161,6 @@ instance Functor Expr where
 instance Functor UnOp where
     fmap f (Neg a) = Neg (f a)
     fmap f (Not a) = Not (f a)
-    fmap f (Incr a) = Incr (f a)
-    fmap f (Decr a) = Decr (f a)
 
 instance Functor BinOp where
     fmap f (Add a) = Add (f a)
@@ -242,8 +238,6 @@ instance PrettyPrint (Expr a) where
     printi _ (App _ e es) = printi 0 e ++ "("++intercalate ", " (map (printi 0) es)++")"
     printi _ (UnaryOp _ (Neg _) e) = "-"++printi 0 e
     printi _ (UnaryOp _ (Not _) e) = "!"++printi 0 e
-    printi _ (UnaryOp _ (Incr _) e) = printi 0 e++"++"
-    printi _ (UnaryOp _ (Decr _) e) = printi 0 e++"--"
     printi _ (BinaryOp _ op el er) = "("++printi 0 el ++" "++printi 0 op++" "++printi 0 er ++")"
     printi _ (Member _ e id _) = printi 0 e ++"."++printi 0 id
     printi _ (NewObj _ t m) = 

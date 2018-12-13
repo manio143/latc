@@ -16,6 +16,7 @@ import AbsLatte
 import qualified ProgramStructure as S
 import Desugaring
 import TypeChecker
+import ConstantFolder
 import ReturnChecker
 
 main = do
@@ -34,8 +35,9 @@ process args = do
     progs <- mapM parseFile args >>= return . concatAST
     let ast = desugar progs
         passOne = checkTypes ast
-        passTwo = passOne >>= checkReturnPaths
-    case runExcept passTwo of 
+        passTwo = passOne >>= foldConstants
+        passThree = passTwo >>= checkReturnPaths
+    case runExcept passThree of 
         Left err -> reportError err
         Right ast -> putStrLn (S.printi 0 ast)
 

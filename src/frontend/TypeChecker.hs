@@ -522,18 +522,6 @@ checkE (UnaryOp pos op e) = do
         (Not _, BoolT _) -> return (UnaryOp pos op ne, et)
         (Neg _, IntT _) -> return (UnaryOp pos op ne, et)
         (Neg _, ByteT _) -> return (UnaryOp pos op ne, et)
-        (Incr _, IntT _) -> do
-            checkEisLValue pos ne
-            return (UnaryOp pos op ne, et)
-        (Incr _, ByteT _) -> do
-            checkEisLValue pos ne
-            return (UnaryOp pos op ne, et)
-        (Decr _, IntT _) -> do
-            checkEisLValue pos ne
-            return (UnaryOp pos op ne, et)
-        (Decr _, ByteT _) -> do
-            checkEisLValue pos ne
-            return (UnaryOp pos op ne, et)
         (Not _, _) -> throw ("Expected boolean expression, given "++typeName et, pos)
         _ -> throw ("Expected a number, given "++typeName et, pos)
 checkE (BinaryOp pos op el er) = do

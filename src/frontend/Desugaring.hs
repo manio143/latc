@@ -29,8 +29,8 @@ desugarS (A.Empty a) = B.Empty a
 desugarS (A.BStmt a b) = B.BlockStmt a (desugarB b)
 desugarS (A.Decl a t is) = B.VarDecl a (map (\i -> (desugarT t, desugarDI i)) is)
 desugarS (A.Ass a e1 e2) = B.Assignment a (desugarE e1) (desugarE e2)
-desugarS (A.Incr a e) = B.ExprStmt a (B.UnaryOp a (B.Incr a) (desugarE e))
-desugarS (A.Decr a e) = B.ExprStmt a (B.UnaryOp a (B.Decr a) (desugarE e))
+desugarS (A.Incr a e) = B.Assignment a (desugarE e) (B.BinaryOp a (B.Add a) (desugarE e) (B.Lit a (B.Int a 1)))
+desugarS (A.Decr a e) = B.Assignment a (desugarE e) (B.BinaryOp a (B.Sub a) (desugarE e) (B.Lit a (B.Int a 1)))
 desugarS (A.Ret a e) = B.ReturnValue a (desugarE e)
 desugarS (A.VRet a) = B.ReturnVoid a
 desugarS (A.Cond a e s1 ) = B.IfElse a (desugarE e) (desugarS s1) (B.Empty a)
@@ -47,7 +47,7 @@ desugarS (A.For a t mid e s) = B.BlockStmt a (B.Block a [
               (B.BlockStmt a (B.Block a [
                   B.VarDecl a [(desugarT t, B.Init a (gid mid) (B.ArrAccess a (B.Var a (gid2 "a__" mid)) (B.Var a (gid2 "n__" mid))))],
                   desugarS s,
-                  B.ExprStmt a (B.UnaryOp a (B.Incr a) (B.Var a (gid2 "n__" mid)))]
+                  B.Assignment a (B.Var a (gid2 "n__" mid)) (B.BinaryOp a (B.Add a) (B.Var a (gid2 "n__" mid)) (B.Lit a (B.Int a 1)))]
                 ))])
 
 desugarDI (A.NoInit a mid) = B.NoInit a (gid mid)

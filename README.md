@@ -1,6 +1,11 @@
 # Kompilator Latte
 
 ## Kompilacja i uruchomienie
+Potrzebna jest biblioteka `mtl` w wersji `2.2.2`, która jest na students w wersji `2.1.2`. Więc jednorazowo należy zrobić
+
+    cabal update && cabal install mtl
+
+A następnie
 
     make
     ./latc_frontend file.lat

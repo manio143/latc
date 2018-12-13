@@ -25,7 +25,7 @@ checkFB b@(Block pos _) = do
     if c then return ()
     else throwError ("Not all paths return a value", pos)
 
-checkB (Block _ stmts) = do
+checkB (Block _ stmts) =
     innerCheck stmts
   where
     innerCheck (s:ss) = do
