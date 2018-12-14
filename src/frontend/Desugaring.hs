@@ -70,11 +70,20 @@ desugarE (A.EMember a e mid) = B.Member a (desugarE e) (gid mid) Nothing
 desugarE (A.ENew a t) = B.NewObj a (desugarT t) Nothing
 desugarE (A.ENewArray a t e) = B.NewObj a (desugarT t) (Just $ desugarE e)
 desugarE (A.EArr a e1 e2) = B.ArrAccess a (desugarE e1) (desugarE e2)
-desugarE (A.EString a str) = B.Lit a (B.String a str)
+desugarE (A.EString a str) = B.Lit a (B.String a (delim $ trim str))
+    where
+        trim s = let l = length s in take (l-2) (drop 1 s)
+        delim ('\\':'n':xs) = '\n' : delim xs
+        delim ('\\':'t':xs) = '\t' : delim xs
+        delim ('\\':'\"':xs) = '\"' : delim xs
+        delim ('\\':'\'':xs) = '\'' : delim xs
+        delim ('\\':'\\':xs) = '\\' : delim xs
+        delim (x:xs) = x : delim xs
+        delim [] = []
 desugarE (A.Neg a e) = B.UnaryOp a (B.Neg a) (desugarE e)
 desugarE (A.Not a e) = B.UnaryOp a (B.Not a) (desugarE e)
 desugarE (A.EAdd a e1 (A.Plus a2) e2) = B.BinaryOp a (B.Add a2) (desugarE e1) (desugarE e2)
-desugarE (A.EAdd a e1 (A.Minus a2) e2) = B.BinaryOp a (B.Sub a2) (desugarE e1) (desugarE e2)
+desugarE (A.EAdd a e1 (A.Minus a2) e2) = B.BinaryOp a (B.Add a2) (desugarE e1) (B.UnaryOp a (B.Neg a) (desugarE e2))
 desugarE (A.EMul a e1 (A.Times a2) e2) = B.BinaryOp a (B.Mul a2) (desugarE e1) (desugarE e2)
 desugarE (A.EMul a e1 (A.Div a2) e2) = B.BinaryOp a (B.Div a2) (desugarE e1) (desugarE e2)
 desugarE (A.EMul a e1 (A.Mod a2) e2) = B.BinaryOp a (B.Mod a2) (desugarE e1) (desugarE e2)

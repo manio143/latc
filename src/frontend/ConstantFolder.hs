@@ -1,5 +1,6 @@
 module ConstantFolder (foldConstants) where
 
+import Data.List (sort)
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
@@ -21,18 +22,20 @@ foldConstants (Program p defs) = do
     return (Program p ndefs)
 
 foldD (FunctionDef p t id args b) = do
-    (nb,_) <- foldB b
+    (nb,_) <- local (fromArgs args) (foldB b)
     return (FunctionDef p t id args nb)
 foldD (ClassDef p id par mems) = do
     nmems <- mapM foldMem mems
     return (ClassDef p id par nmems)
 
 foldMem (MethodDecl p t id args b) = do
-    (nb,_) <- foldB b
+    (nb,_) <- local (fromArgs args) (foldB b)
     return (MethodDecl p t id args nb)
 foldMem m = return m
 
 throw = lift . lift . throwError
+
+fromArgs args _ = map (\(Arg _ _ id) -> (id, Dynamic)) args
 
 foldB :: Block Position -> OuterMonad (Block Position, Environment -> Environment)
 foldB (Block p stmts) = do
@@ -69,9 +72,7 @@ valExp _ = Dynamic
 envUpdate ui@(Ident _ m) v ((i@(Ident p n), vv):is) =
     if n == m then (i, v) : is
     else (i,vv): envUpdate ui v is
-envUpdateExp ui@(Ident _ m) e ((i@(Ident p n), v):is) =
-    if n == m then (i, valExp e) : is
-    else (i,v): envUpdateExp ui e is
+envUpdateExp ui e is = envUpdate ui (valExp e) is
 
 removeBlock n es = 
     case indexOfBlock n es 0 of
@@ -224,7 +225,18 @@ foldE (BinaryOp p op el er) = do
         Ge _ -> checkConst (\c -> c == GT || c == EQ) nel ner (BinaryOp p op nel ner)
         Lt _ -> checkConst (== LT) nel ner (BinaryOp p op nel ner)
         Le _ -> checkConst (\c -> c == LT || c == EQ) nel ner (BinaryOp p op nel ner)
-        _ -> return (BinaryOp p op nel ner)
+        _ -> do
+            let lin = linearize (BinaryOp p op nel ner)
+                nop = fmap nill op
+            if nop == Div () || nop == Mod () || nop == Sub () then do
+                let fslin = foldconsts op lin
+                    foldBack = foldl1 (BinaryOp p op) fslin
+                return foldBack
+            else do
+                let slin = sort lin
+                    fslin = foldconsts op slin
+                    foldBack = foldl1 (BinaryOp p op) fslin
+                return foldBack
   where
     true p = (Lit p (Bool p True))
     false p = (Lit p (Bool p False))
@@ -238,8 +250,42 @@ foldE (BinaryOp p op el er) = do
             (String p i, String _ j) -> if f $ compare i j then return (true p)
                                  else return (false p)
     checkConst _ _ _ r = return r
+    foldconsts :: BinOp Position -> [Expr Position] -> [Expr Position]
+    foldconsts op@(Add _) ((Lit p (String _ i)):(Lit _ (String _ j)):xs) = foldconsts op $ (Lit p (String p (i ++ j))):xs
+    foldconsts op@(Add _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i+j))):xs
+    foldconsts op@(Sub _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i-j))):xs
+    foldconsts op@(Mul _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i*j))):xs
+    foldconsts op@(Div _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i `div` j))):xs
+    foldconsts op@(Mod _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i `mod` j))):xs
+    foldconsts op@(And _) ((Lit p (Bool _ i)):(Lit _ (Bool _ j)):xs) = foldconsts op $ (Lit p (Bool p (i && j))):xs
+    foldconsts (And _) ((Lit _ (Bool _ True)):xs) = xs
+    foldconsts (And _) (f@(Lit _ (Bool _ False)):xs) = [f]
+    foldconsts op@(Or _) ((Lit p (Bool _ i)):(Lit _ (Bool _ j)):xs) = foldconsts op $ (Lit p (Bool p (i || j))):xs
+    foldconsts (Or _) (f@(Lit _ (Bool _ True)):xs) = [f]
+    foldconsts (Or _) ((Lit _ (Bool _ False)):xs) = xs
+    foldconsts _ xs = xs
 
-sameExp e1 e2 = fmap (\_ -> ()) e1 == fmap (\_ -> ()) e2
+
+sameExp e1 e2 = fmap nill e1 == fmap nill e2
+
+nill _ = ()
+
+type LinearizedExprTree = [Expr Position]
+linearize (BinaryOp p op el er) =
+    let left = case el of
+                BinaryOp _ op2 _ _ ->
+                    if fmap nill op == fmap nill op2 then
+                        linearize el
+                    else [el]
+                _ -> [el]
+        right = case er of
+                 BinaryOp _ op2 _ _ ->
+                    if fmap nill op == fmap nill op2 then
+                        linearize er
+                    else [er]
+                 _ -> [er]
+    in left ++ right
+
 
 checkNull :: Expr Position -> Position -> OuterMonad ()
 checkNull (Lit _ (Null _)) pos = throw ("Expression is always null", pos)

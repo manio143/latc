@@ -64,8 +64,8 @@ data Type a = VoidT a
             | FunT a (Type a) [Type a]
   deriving (Eq, Ord, Show, Read)
 
-data Expr a = Var a (Ident a)
-            | Lit a (Lit a)
+data Expr a = Lit a (Lit a)
+            | Var a (Ident a)
             | App a (Expr a) [Expr a]         -- e1(e2)
             | UnaryOp a (UnOp a) (Expr a)
             | BinaryOp a (BinOp a) (Expr a) (Expr a)
@@ -230,7 +230,7 @@ instance PrettyPrint (Type a) where
     printi _ (InfferedT _) = "var"
     printi _ (ClassT _ id) = printi 0 id
     printi _ (ArrayT _ t) = printi 0 t ++ "[]"
-    printi _ (FunT _ t ts) = "("++printi 0 t++" -> ("++intercalate ", " (map (printi 0) ts) ++"))"
+    printi _ (FunT _ t ts) = "("++printi 0 t++" ("++intercalate ", " (map (printi 0) ts) ++"))"
 
 instance PrettyPrint (Expr a) where
     printi _ (Var _ id) = printi 0 id
@@ -264,7 +264,7 @@ instance PrettyPrint (BinOp a) where
 
 instance PrettyPrint (Lit a) where
     printi _ (Int _ i) = show i
-    printi _ (String _ s) = s
+    printi _ (String _ s) = show s
     printi _ (Bool _ b) = if b then "true" else "false"
     printi _ (Null _) = "null"
 
