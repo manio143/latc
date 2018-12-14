@@ -217,7 +217,10 @@ foldE (UnaryOp p op e) = do
 foldE (BinaryOp p op el er) = do 
     nel <- foldE el
     ner <- foldE er
-    case op of
+    let ne = (BinaryOp p op nel ner)
+        sp = specialExp ne
+    if fmap nill sp /= fmap nill ne then foldE sp
+    else case op of
         Equ _ -> if sameExp nel ner then return (Lit p (Bool p True))
                  else return (BinaryOp p op nel ner)
         Neq _ -> checkConst (/= EQ) nel ner (BinaryOp p op nel ner)
@@ -264,6 +267,9 @@ foldE (BinaryOp p op el er) = do
     foldconsts (Or _) (f@(Lit _ (Bool _ True)):xs) = [f]
     foldconsts (Or _) ((Lit _ (Bool _ False)):xs) = xs
     foldconsts _ xs = xs
+    specialExp :: Expr Position -> Expr Position
+    specialExp (BinaryOp p (Div pop) (BinaryOp _ (Div _) el er) e) = (BinaryOp p (Div pop) el (BinaryOp p (Mul p) er e))
+    specialExp e = e
 
 
 sameExp e1 e2 = fmap nill e1 == fmap nill e2
