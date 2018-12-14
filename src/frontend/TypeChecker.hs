@@ -8,7 +8,9 @@ module TypeChecker (checkTypes) where
 import Data.Maybe (fromJust)
 import Data.List (nub, (\\), sort)
 import Control.Monad.Except hiding (void)
-import Control.Monad.Trans.Reader
+import Control.Monad.Reader hiding (void)
+
+import Debug.Trace
 
 import ProgramStructure
 
@@ -80,15 +82,15 @@ checkRedeclarationInClasses cls = do
         dupsM = map duplicates memberNames
     mapM_ throwOnDuplicates dupsM
     -- Type check of same name methods in parents
-    let members = map (membersUpTree cls) cls
+    let members = map (membersUpTree cls 0) cls
     mapM_ (checkInheritedMemberTypes cls) members
     where
-        membersUpTree cls (Class _ par mems) =
-            let localMemberNames = map (\m -> (memberName m, m)) mems
+        membersUpTree cls i (Class _ par mems) =
+            let localMemberNames = map (\m -> (memberName m, i, m)) mems
                 mparentClass = fmap (findClass cls) par
             in case mparentClass of
                 Nothing -> localMemberNames
-                Just parentClass -> localMemberNames ++ membersUpTree cls parentClass
+                Just parentClass -> localMemberNames ++ membersUpTree cls (i+1) parentClass
         memberName (Field (Ident _ n) _) = n
         memberName (Method (Ident _ n) _ _) = n
         memberPos (Field (Ident p _) _) = p
@@ -101,10 +103,10 @@ checkRedeclarationInClasses cls = do
                 [] -> return ()
         checkInheritedMemberTypes cls members = walk $ sort members
             where
-                walk ((a,Field (Ident p _) _):(b, Field (Ident p2 _) _):r) | a == b = throwError ("Redeclaration of field "++a++".\nAlready declared here: "++show p2, p)
-                walk ((a, Field (Ident p _) _):(b, Method _ _ _):r) | a == b = throwError ("Method with name "++a++" already exists in a parent class", p)
-                walk ((a, Method (Ident p _) _ _):(b, Field _ _):r) | a == b = throwError ("Field with name "++a++" already exists in a parent class", p)
-                walk ((a, Method (Ident p _) t1 t2):bb@(b, Method _ tt1 tt2):r) | a == b = do
+                walk ((a,_,Field (Ident p _) _):(b,_, Field (Ident p2 _) _):r) | a == b = throwError ("Redeclaration of field "++a++".\nAlready declared here: "++show p2, p)
+                walk ((a,_, Field (Ident p _) _):(b,_, Method _ _ _):r) | a == b = throwError ("Method with name "++a++" already exists in a parent class", p)
+                walk ((a,_, Method (Ident p _) _ _):(b,_, Field _ _):r) | a == b = throwError ("Field with name "++a++" already exists in a parent class", p)
+                walk ((a,_, Method (Ident p _) t1 t2):bb@(b,_, Method _ tt1 tt2):r) | a == b = do
                     cond <- tcanBeCastUp cls (FunT Undefined t1 t2) (FunT Undefined tt1 tt2)
                     if cond then walk (bb:r)
                     else throwError ("Method "++a++" has an incompatible type with overriden method in a parent class", p)
@@ -185,13 +187,13 @@ checkP (Program pos defs) = mapM checkD defs >>= return . Program pos
 
 checkD :: Definition Position -> OuterMonad (Definition Position)
 checkD (FunctionDef pos tret id args b) = do
-    checkTypeExists tret
-    mapM (lift . typeFromArg) args >>= mapM_ checkTypeExists
+    checkTypeExists AllowVoid tret
+    mapM (lift . typeFromArg) args >>= mapM_ (checkTypeExists NoVoid)
     checkArgsRedeclaration args
     checkedBody <- local (funEnv tret args) (checkB b)
     return $ FunctionDef pos tret id args checkedBody
 checkD (ClassDef pos id parent decls) = do
-    checkTypeExists (ClassT pos pid)
+    checkTypeExists NoVoid (ClassT pos pid)
     checkedDecls <- local (classEnv pos id) (mapM checkM decls)
     return $ ClassDef pos id (Just pid) checkedDecls
     where
@@ -207,11 +209,11 @@ funEnv ret args (classes, functions, env) = (classes, functions, newenv)
         fromArg (Arg pos t id) = (id, t)
 
 checkM f@(FieldDecl pos t id) = do
-    checkTypeExists t
+    checkTypeExists NoVoid t
     return f
 checkM (MethodDecl pos tret id args b) = do
-    checkTypeExists tret
-    mapM (lift . typeFromArg) args >>= mapM_ checkTypeExists
+    checkTypeExists AllowVoid tret
+    mapM (lift . typeFromArg) args >>= mapM_ (checkTypeExists NoVoid)
     checkArgsRedeclaration args
     checkedBody <- local (funEnv tret args) (checkB b)
     return $ MethodDecl pos tret id args checkedBody
@@ -249,7 +251,7 @@ checkS (VarDecl pos decls) = do
         checkDecls (d@(t, NoInit pos id):ds) = do
             checkRedeclaration id
             lift $ assureProperType t
-            checkTypeExists t
+            checkTypeExists NoVoid t
             (nds, f) <- local (addVar id t) (checkDecls ds)
             return (d:nds, f . addVar id t)
         checkDecls (d@(t, Init pos id e):ds) = do
@@ -260,7 +262,7 @@ checkS (VarDecl pos decls) = do
                                     InfferedT _ -> throw ("Type cannot be inffered from null", pos)
                                     _ -> return et
                     _ -> do
-                        checkTypeExists t
+                        checkTypeExists NoVoid t
                         checkCastUp pos et t
                         return t
             (nds, f) <- local (addVar id nt) (checkDecls ds)
@@ -349,14 +351,16 @@ tcanBeCastUp classes tFrom tTo = do
         (VoidT _, VoidT _) -> return True
         (ByteT _, IntT _) -> return True
         (StringT _, ClassT _ (Ident _ "String")) -> return True
+        (StringT _, ClassT _ (Ident _ "Object")) -> return True
         (ClassT _ (Ident _ "String"), StringT _) -> return True
         (ClassT _ idSon, ClassT _ idPar) -> if idSon == idPar then return True
                                           else isParent classes idSon idPar
         (ArrayT _ t1, ArrayT _ t2) -> equivalentType classes t1 t2
         (FunT _ t1 ts1, FunT _ t2 ts2) -> do
             t <- tcanBeCastUp classes t1 t2
+            let lcheck = length ts1 == length ts2
             cs <- mapM (\(t1, t2) -> tcanBeCastUp classes t1 t2) (zip ts1 ts2)
-            return (all (== True) (t:cs))
+            return (all id (lcheck:t:cs))
         (InfferedT _, _) -> return True -- only when checking Expr.App
         (StringT _, InfferedT _) -> return True -- only when casting null
         (ClassT _ _, InfferedT _) -> return True -- only when casting null
@@ -407,6 +411,7 @@ lookupH i@(Ident _ name) (c@(Class (Ident _ n) _ _):xs) =
     else lookupH i xs
 lookupH _ [] = Nothing
 
+retrieve :: String -> OuterMonad (Maybe (Type Position))
 retrieve str = do
     (_,_,env) <- ask
     let l = filter (\(Ident _ n, t) -> n == str) env
@@ -414,14 +419,16 @@ retrieve str = do
         (h:_) -> return . Just $ snd h
         [] -> return Nothing
 
-checkTypeExists :: Type Position -> OuterMonad ()
-checkTypeExists (ClassT _ id@(Ident pos n)) = do
+data VoidFlag = AllowVoid | NoVoid
+checkTypeExists :: VoidFlag -> Type Position -> OuterMonad ()
+checkTypeExists _ (ClassT _ id@(Ident pos n)) = do
     (cls,_,_) <- ask
     case lookupH id cls of
         Just x -> return ()
         _ -> throw ("Undeclared type "++n, pos)
-checkTypeExists (ArrayT _ t) = checkTypeExists t
-checkTypeExists _ = return ()
+checkTypeExists _ (ArrayT _ t) = checkTypeExists NoVoid t
+checkTypeExists NoVoid (VoidT pos) = throw ("Illegal use of type void", pos)
+checkTypeExists _ _ = return ()
 
 checkE :: Expr Position -> OuterMonad (Expr Position, Type Position)
 checkE (Lit pos l@(Int _ i)) = 
@@ -472,11 +479,11 @@ checkE (App pos efun es) = do
         FunT _ ret _ -> do
             nes <- mapM checkE es
             let efts = map snd nes
-            canBeCastUp (FunT pos (InfferedT pos) efts) eft
+            checkCastUp pos (FunT pos (InfferedT pos) efts) eft
             return (App pos nef (map fst nes), ret)
         _ -> throw ("Expected a function or a method, given"++typeName eft, pos)
 checkE (Cast pos t e) = do
-    checkTypeExists t
+    checkTypeExists NoVoid t
     case t of
         InfferedT _ -> throw ("Invalid type in cast expression", pos)
         _ -> do
@@ -495,7 +502,7 @@ checkE (ArrAccess pos earr ein) = do
                 _ -> throw ("Expected a numerical index, given "++typeName et, pos)
         _ -> throw ("Expected array type, given "++typeName art, pos)
 checkE (NewObj pos t m) = do
-    checkTypeExists t
+    checkTypeExists NoVoid t
     case m of
         Nothing -> return (NewObj pos t m, t)
         Just e -> do
@@ -595,6 +602,7 @@ checkE (BinaryOp pos op el er) = do
         (Or _, BoolT _, BoolT _) -> return (BinaryOp pos op nel ner, elt)
         _ -> err
 
+getMemberType :: Ident Position -> Ident Position -> OuterMonad (Maybe (Type Position))
 getMemberType classId (Ident _ n) = do
     (cls, _, _) <- ask
     let h = hierarchy cls classId
