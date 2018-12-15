@@ -18,6 +18,7 @@ import Desugaring
 import TypeChecker
 import ConstantFolder
 import ReturnChecker
+import FrontendBackendTranslator
 
 main = do
     args <- getArgs
@@ -33,13 +34,21 @@ displayHelp = do
 
 process args = do
     progs <- mapM parseFile args >>= return . concatAST
-    let ast = desugar progs
-        passOne = checkTypes ast
-        passTwo = passOne >>= foldConstants
-        passThree = passTwo >>= checkReturnPaths
-    case runExcept passThree of 
+    processed <- processAST progs
+    case runExcept processed of 
         Left err -> reportError err
-        Right ast -> putStrLn (S.printi 0 ast)
+        Right (ast, cls) -> do
+            putStrLn (S.printi 0 ast)
+            let linear = translate ast cls
+            print linear
+
+processAST progs = do
+    let ast = desugar progs
+    return $ do
+        (passOne, cls) <- checkTypes ast
+        passTwo <- foldConstants passOne
+        passThree <- checkReturnPaths passTwo
+        return (passThree, cls)
 
 parseFile file = do
     f <- readFile file

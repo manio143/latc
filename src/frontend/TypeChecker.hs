@@ -1,9 +1,8 @@
-module TypeChecker (checkTypes) where
+module TypeChecker (checkTypes, Class (..), Member (..)) where
 
 -- This module traverses the desugared AST and checks
 -- types as well as undeclared variables.
 -- First, a list of user defined classes is computed.
--- TODO (maybe in another module) check that each branching path in function has a return
 
 import Data.Maybe (fromJust)
 import Data.List (nub, (\\), sort)
@@ -17,15 +16,17 @@ import ProgramStructure
 type InnerMonad = Except (String, Position) 
 type OuterMonad = ReaderT Environment (Except (String, Position))
 
-checkTypes :: Program Position -> InnerMonad(Program Position)
+checkTypes :: Program Position -> InnerMonad (Program Position, [Class])
 checkTypes prog@(Program pos defs) = do
     classDefs <- getClasses defs
     let classes = addBuiltInTypes $ map changeEmptyParent classDefs
+    checkCyclesInClasses classes
     checkRedeclarationInClasses classes
     funDefs <- getFunctions defs
     let functions = addBuiltInFunctions funDefs
     checkRedeclarationInFunctions functions
-    runReaderT (checkP prog) (classes, functions, [])
+    np <- runReaderT (checkP prog) (classes, functions, [])
+    return (np, classes)
 
 data Class = Class 
                 {-name-}(Ident Position) 
@@ -113,6 +114,15 @@ checkRedeclarationInClasses cls = do
                 walk (_:r) = walk r
                 walk [] = return ()
 
+checkCyclesInClasses cls = mapM_ (checkCycle []) cls
+    where
+        checkCycle :: [String] -> Class -> InnerMonad ()
+        checkCycle l (Class (Ident p n) mp _) = 
+            case mp of
+                Nothing -> return ()
+                Just (Ident _ m) -> if elem m l then throwError ("Cycle in inheritance of class "++n, p)
+                                else checkCycle (n:l) (clas m)
+        clas m = head $ filter (\(Class (Ident _ n) _ _) -> n == m) cls
 
 addBuiltInTypes types = builtIn ++ types
     where
@@ -133,7 +143,8 @@ addBuiltInTypes types = builtIn ++ types
                     Method (name "substring") (class_ "String") [int, int]
                 ],
                 Class (name "Array") (Just (name "Object")) [
-                    Field (name "length") int
+                    Field (name "length") int,
+                    Method (name "toString") string []
                 ]
             ]
 
