@@ -123,12 +123,12 @@ foldS (Assignment p el er) = do
             let f = if not iif then envUpdateExp id ne
                     else envUpdate id Dynamic
             return (Assignment p el ne, f)
-        (ArrAccess pp earr eidx) -> do
+        (ArrAccess pp earr eidx m) -> do
             nearr <- foldE earr
             neidx <- foldE eidx
             checkNull nearr pp
             checkNegative neidx pp
-            return (Assignment p (ArrAccess pp nearr neidx) ne, id)
+            return (Assignment p (ArrAccess pp nearr neidx m) ne, id)
         (Member pp eobj i mt) -> do
             neobj <- foldE eobj
             checkNull neobj pp
@@ -188,13 +188,20 @@ foldE (Member p el id mt) = do
 foldE (NewObj p t me) = do
     nme <- mapM foldE me
     return (NewObj p t nme)
-foldE (ArrAccess p el er) = do
+foldE (ArrAccess p el er m) = do
     nel <- foldE el
     checkNull nel p
     ner <- foldE er
     checkNegative ner p
-    return (ArrAccess p nel ner)
-foldE (Cast p t e) = foldE e >>= \ne -> return (Cast p t ne)
+    return (ArrAccess p nel ner m)
+foldE (Cast p t e) = do
+    ne <- foldE e
+    case (t, ne) of
+        (IntT _, Lit p2 (Byte _ b)) -> return (Lit p2 (Int p2 b))
+        (ByteT _, Lit p2 (Int _ b)) -> 
+            if b < 256 && b >= 0 then return (Lit p2 (Byte p2 b))
+            else return (Cast p t ne)
+        _ -> return (Cast p t ne)
 foldE (Var p id@(Ident _ n)) = do
     env <- ask
     m <- find id env
@@ -209,6 +216,7 @@ foldE (UnaryOp p op e) = do
     case op of
         Neg _ -> case ne of
                     Lit _ (Int _ i) -> return (Lit p (Int p (-i)))
+                    Lit _ (Byte _ i) -> return (Lit p (Byte p (-i)))
                     _ -> return (UnaryOp p op ne)
         Not _ -> case ne of
                     Lit _ (Bool _ b) -> return (Lit p (Bool p (not b)))

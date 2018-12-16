@@ -45,7 +45,7 @@ desugarS (A.For a t mid e s) = B.BlockStmt a (B.Block a [
                 (B.Var a (gid2 "n__" mid))
                 (B.Member a (B.Var a (gid2 "a__" mid)) (B.Ident a "length") Nothing))
               (B.BlockStmt a (B.Block a [
-                  B.VarDecl a [(desugarT t, B.Init a (gid mid) (B.ArrAccess a (B.Var a (gid2 "a__" mid)) (B.Var a (gid2 "n__" mid))))],
+                  B.VarDecl a [(desugarT t, B.Init a (gid mid) (B.ArrAccess a (B.Var a (gid2 "a__" mid)) (B.Var a (gid2 "n__" mid)) Nothing))],
                   desugarS s,
                   B.Assignment a (B.Var a (gid2 "n__" mid)) (B.BinaryOp a (B.Add a) (B.Var a (gid2 "n__" mid)) (B.Lit a (B.Int a 1)))]
                 ))])
@@ -67,9 +67,13 @@ desugarE (A.ELitFalse a) = B.Lit a (B.Bool a False)
 desugarE (A.ELitNull a) = B.Lit a (B.Null a)
 desugarE (A.EApp a e es) = B.App a (desugarE e) (map desugarE es)
 desugarE (A.EMember a e mid) = B.Member a (desugarE e) (gid mid) Nothing
-desugarE (A.ENew a t) = B.NewObj a (desugarT t) Nothing
+desugarE (A.ENew a t) = 
+    let nt = desugarT t in
+    case nt of
+        B.ArrayT a2 tt -> B.NewObj a tt (Just (B.Lit a2 (B.Int a2 0)))
+        _ -> B.NewObj a nt Nothing
 desugarE (A.ENewArray a t e) = B.NewObj a (desugarT t) (Just $ desugarE e)
-desugarE (A.EArr a e1 e2) = B.ArrAccess a (desugarE e1) (desugarE e2)
+desugarE (A.EArr a e1 e2) = B.ArrAccess a (desugarE e1) (desugarE e2) Nothing
 desugarE (A.EString a str) = B.Lit a (B.String a (delim $ trim str))
     where
         trim s = let l = length s in take (l-2) (drop 1 s)

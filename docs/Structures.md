@@ -10,7 +10,6 @@ Tak wygląda struktura referencji:
         Type* type;
         void* data;
         int counter;
-        char[] padding = {0,0,0,0};
     }
 
 ## Tablice

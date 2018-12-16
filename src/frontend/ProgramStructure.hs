@@ -71,7 +71,7 @@ data Expr a = Lit a (Lit a)
             | BinaryOp a (BinOp a) (Expr a) (Expr a)
             | Member a (Expr a) (Ident a) (Maybe TypeName)      -- (e1).e2
             | NewObj a (Type a) (Maybe (Expr a))               -- new T
-            | ArrAccess a (Expr a) (Expr a)    -- e1[e2]
+            | ArrAccess a (Expr a) (Expr a) (Maybe (Type a))   -- e1[e2]
             | Cast a (Type a) (Expr a)         -- (T)e1
   deriving (Eq, Ord, Show, Read)
 
@@ -99,6 +99,7 @@ data BinOp a = Add a
 data Lit a = Int a Integer
            | String a String
            | Bool a Bool
+           | Byte a Integer
            | Null a
   deriving (Eq, Ord, Show, Read)
 
@@ -155,7 +156,7 @@ instance Functor Expr where
     fmap f (BinaryOp a o e1 e2) = BinaryOp (f a) (fmap f o) (fmap f e1) (fmap f e2)
     fmap f (Member a e id m) = Member (f a) (fmap f e) (fmap f id) m
     fmap f (NewObj a t m) = NewObj (f a) (fmap f t) (fmap (fmap f) m)
-    fmap f (ArrAccess a el er) = ArrAccess (f a) (fmap f el) (fmap f er)
+    fmap f (ArrAccess a el er m) = ArrAccess (f a) (fmap f el) (fmap f er) (fmap (fmap f) m)
     fmap f (Cast a t e) = Cast (f a) (fmap f t) (fmap f e)
 
 instance Functor UnOp where
@@ -181,6 +182,8 @@ instance Functor Lit where
     fmap f (Int a i) = Int (f a) i
     fmap f (String a s) = String (f a) s
     fmap f (Bool a b) = Bool (f a) b
+    fmap f (Byte a b) = Byte (f a) b
+    fmap f (Null a) = Null (f a)
 
 
 class PrettyPrint x where
@@ -244,7 +247,7 @@ instance PrettyPrint (Expr a) where
         case m of
             Nothing -> "new "++printi 0 t
             Just e -> "new "++printi 0 t++"["++printi 0 e++"]"
-    printi _ (ArrAccess _ e1 e2) = printi 0 e1 ++"["++printi 0 e2++"]"
+    printi _ (ArrAccess _ e1 e2 _) = printi 0 e1 ++"["++printi 0 e2++"]"
     printi _ (Cast _ t e) = "("++printi 0 t++")("++printi 0 e++")"
 
 instance PrettyPrint (BinOp a) where
@@ -264,6 +267,7 @@ instance PrettyPrint (BinOp a) where
 
 instance PrettyPrint (Lit a) where
     printi _ (Int _ i) = show i
+    printi _ (Byte _ i) = show i
     printi _ (String _ s) = show s
     printi _ (Bool _ b) = if b then "true" else "false"
     printi _ (Null _) = "null"

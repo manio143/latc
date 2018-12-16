@@ -18,6 +18,7 @@ import Desugaring
 import TypeChecker
 import ConstantFolder
 import ReturnChecker
+import qualified LinearRepresentation as L
 import FrontendBackendTranslator
 
 main = do
@@ -39,8 +40,9 @@ process args = do
         Left err -> reportError err
         Right (ast, cls) -> do
             putStrLn (S.printi 0 ast)
+            putStrLn "\n--------------------\n"
             let linear = translate ast cls
-            print linear
+            putStrLn (L.linShow linear)
 
 processAST progs = do
     let ast = desugar progs

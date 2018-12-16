@@ -144,6 +144,7 @@ addBuiltInTypes types = builtIn ++ types
                 ],
                 Class (name "Array") (Just (name "Object")) [
                     Field (name "length") int,
+                    Field (name "padding") int,
                     Method (name "toString") string []
                 ]
             ]
@@ -443,11 +444,12 @@ checkTypeExists _ _ = return ()
 
 checkE :: Expr Position -> OuterMonad (Expr Position, Type Position)
 checkE (Lit pos l@(Int _ i)) = 
-    if i < 256 && i >= 0 then return (Lit pos l, ByteT pos)
+    if i < 256 && i >= 0 then return (Lit pos (Byte pos i), ByteT pos)
     else if i < 2^31 && i >= -(2^31) then return (Lit pos l, IntT pos)
     else throw ("Constant exceeds the size of int", pos)
 checkE (Lit pos l@(String _ _)) = return (Lit pos l, StringT pos)
 checkE (Lit pos l@(Bool _ _)) = return (Lit pos l, BoolT pos)
+checkE (Lit pos l@(Byte _ _)) = return (Lit pos l, ByteT pos)
 checkE (Lit pos l@(Null _)) = return (Lit pos l, InfferedT pos)
 checkE (Var pos id) = do
     mv <- getVar id
@@ -502,20 +504,24 @@ checkE (Cast pos t e) = do
             c <- canBeCastDown et t
             if c then return (Cast pos t ne, t)
             else throw ("Illegal cast of "++typeName et++" to "++typeName t, pos)
-checkE (ArrAccess pos earr ein) = do
+checkE (ArrAccess pos earr ein _) = do
     (nearr, art) <- checkE earr
     case art of
         ArrayT _ t -> do
             (nein, et) <- checkE ein
             case et of
-                IntT _ -> return (ArrAccess pos nearr nein, t)
-                ByteT _ -> return (ArrAccess pos nearr (Cast pos int nein), t)
+                IntT _ -> return (ArrAccess pos nearr nein (Just t), t)
+                ByteT _ -> return (ArrAccess pos nearr (Cast pos int nein) (Just t), t)
                 _ -> throw ("Expected a numerical index, given "++typeName et, pos)
         _ -> throw ("Expected array type, given "++typeName art, pos)
 checkE (NewObj pos t m) = do
     checkTypeExists NoVoid t
     case m of
-        Nothing -> return (NewObj pos t m, t)
+        Nothing -> do
+            case t of
+                ClassT _ _ -> return ()
+                _ -> throw ("Expected a class", pos)
+            return (NewObj pos t m, t)
         Just e -> do
             (ne, et) <- checkE e
             b <- canBeCastUp et int
@@ -546,72 +552,36 @@ checkE (BinaryOp pos op el er) = do
     (nel, elt) <- checkE el
     (ner, ert) <- checkE er
     let err = throw ("Incompatible operands' types: "++typeName elt++" and "++typeName ert, pos)
-    case (op, elt, ert) of
-        (Add _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, elt)
-        (Add _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, elt)
-        (Add _, IntT _, ByteT _) -> return (BinaryOp pos op nel ner, elt)
-        (Add _, ByteT _, IntT _) -> return (BinaryOp pos op nel ner, ert)
-        (Add _, StringT _, StringT _) -> return (BinaryOp pos op nel ner, elt)
+    case (op, fmap (\_->()) elt, fmap (\_->()) ert) of
         (Add _, ClassT _ (Ident _ "String"), ClassT _ (Ident _ "String")) -> return (BinaryOp pos op nel ner, elt)
         (Add _, StringT _, ClassT _ (Ident _ "String")) -> return (BinaryOp pos op nel ner, elt)
         (Add _, ClassT _ (Ident _ "String"), StringT _) -> return (BinaryOp pos op nel ner, ert)
-        (Sub _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, elt)
-        (Sub _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, elt)
-        (Sub _, IntT _, ByteT _) -> return (BinaryOp pos op nel ner, elt)
-        (Sub _, ByteT _, IntT _) -> return (BinaryOp pos op nel ner, ert)
-        (Mul _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, elt)
-        (Mul _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, elt)
-        (Mul _, IntT _, ByteT _) -> return (BinaryOp pos op nel ner, elt)
-        (Mul _, ByteT _, IntT _) -> return (BinaryOp pos op nel ner, ert)
-        (Div _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, elt)
-        (Div _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, elt)
-        (Div _, IntT _, ByteT _) -> return (BinaryOp pos op nel ner, elt)
-        (Div _, ByteT _, IntT _) -> return (BinaryOp pos op nel ner, ert)
-        (Mod _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, elt)
-        (Mod _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, elt)
-        (Mod _, IntT _, ByteT _) -> return (BinaryOp pos op nel ner, elt)
-        (Mod _, ByteT _, IntT _) -> return (BinaryOp pos op nel ner, ert)
-        (Lt _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Lt _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
-        (Lt _, IntT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Lt _, ByteT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
-        (Le _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Le _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
-        (Le _, IntT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Le _, ByteT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
-        (Gt _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Gt _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
-        (Gt _, IntT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Gt _, ByteT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
-        (Ge _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Ge _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
-        (Ge _, IntT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Ge _, ByteT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
-        (Equ _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Equ _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
-        (Equ _, IntT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Equ _, ByteT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
-        (Neq _, ByteT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Neq _, IntT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
-        (Neq _, IntT _, ByteT _) -> return (BinaryOp pos op nel ner, bool)
-        (Neq _, ByteT _, IntT _) -> return (BinaryOp pos op nel ner, bool)
         (Equ _, ClassT _ (Ident _ "String"), StringT _) -> return (BinaryOp pos op nel ner, bool)
         (Equ _, StringT _, ClassT _ (Ident _ "String")) -> return (BinaryOp pos op nel ner, bool)
-        (Equ _, StringT _, StringT _) -> return (BinaryOp pos op nel ner, bool)
-        (Equ _, BoolT _, BoolT _) -> return (BinaryOp pos op nel ner, bool)
         (Neq _, ClassT _ (Ident _ "String"), StringT _) -> return (BinaryOp pos op nel ner, bool)
         (Neq _, StringT _, ClassT _ (Ident _ "String")) -> return (BinaryOp pos op nel ner, bool)
-        (Neq _, StringT _, StringT _) -> return (BinaryOp pos op nel ner, bool)
-        (Neq _, BoolT _, BoolT _) -> return (BinaryOp pos op nel ner, bool)
-        (Equ _, ClassT _ (Ident _ a), ClassT _ (Ident _ b)) -> 
-            if a == b then return (BinaryOp pos op nel ner, bool)
+        (op, a, b) -> 
+            if a == b then
+                case a of
+                    ClassT _ _ -> case op of
+                                    Equ _ -> return (BinaryOp pos op nel ner, bool)
+                                    Neq _ -> return (BinaryOp pos op nel ner, bool)
+                                    _ -> err
+                    _ -> return (BinaryOp pos op nel ner, opType elt op)
+            else if a == IntT () && b == ByteT () then
+                checkE (BinaryOp pos op nel (Cast pos (IntT pos) ner))
+            else if a == ByteT () && b == IntT () then
+                checkE (BinaryOp pos op (Cast pos (IntT pos) nel) ner)
             else err
-        (Neq _, ClassT _ (Ident _ a), ClassT _ (Ident _ b)) -> 
-            if a == b then return (BinaryOp pos op nel ner, bool)
-            else err
-        (And _, BoolT _, BoolT _) -> return (BinaryOp pos op nel ner, elt)
-        (Or _, BoolT _, BoolT _) -> return (BinaryOp pos op nel ner, elt)
-        _ -> err
+    where
+        opType t (Equ _) = bool
+        opType t (Neq _) = bool
+        opType t (Lt _) = bool
+        opType t (Le _) = bool
+        opType t (Gt _) = bool
+        opType t (Ge _) = bool
+        opType t _ = t
+--checkE e = throw ("WTF\n"++show e, Undefined)
 
 getMemberType :: Ident Position -> Ident Position -> OuterMonad (Maybe (Type Position))
 getMemberType classId (Ident _ n) = do
@@ -628,7 +598,7 @@ getMemberType classId (Ident _ n) = do
         memberType (Method (Ident p _) t ts) = FunT p t ts
         memberType (Field (Ident p _) t) = t
 
-checkEisLValue pos (ArrAccess _ _ _) = return ()
+checkEisLValue pos (ArrAccess _ _ _ _) = return ()
 checkEisLValue pos (Var _ _) = return ()
 checkEisLValue pos (Member _ e (Ident _ n) (Just clsName)) = do
     (cls,_,_) <- ask
