@@ -7,14 +7,21 @@ import Control.Monad.State
 
 import Debug.Trace
 
-import ProgramStructure hiding (Undefined)
+import ProgramStructure
 
 type InnerMonad = Except (String, Position)
 type OuterMonad = StateT Int (ReaderT Environment (Except (String, Position)))
 
 type Environment = [(Ident Position, Value)]
-data Value = Undefined | Constant (Lit Position) | Dynamic | Marker
+data Value = Constant (Lit Position) | Dynamic | Marker
     deriving (Eq, Show)
+
+zero (IntT _) = Constant (Int Undefined 0)
+zero (ByteT _) = Constant (Byte Undefined 0)
+zero (BoolT _) = Constant (Bool Undefined False)
+zero _ = Constant (Null Undefined)
+
+ezero t = let (Constant c) = zero t in c
 
 foldConstants :: Program Position -> InnerMonad (Program Position)
 foldConstants (Program p defs) = do
@@ -106,9 +113,9 @@ foldS (VarDecl p decls) = do
     (ndecls, f) <- foldDecls decls
     return (VarDecl p ndecls, f)
     where
-        foldDecls (d@(_, NoInit _ id):ds) = do
-            (nds, f) <- local (envAdd id Undefined) (foldDecls ds)
-            return (d:nds, f . envAdd id Undefined)
+        foldDecls (d@(t, NoInit p id):ds) = do
+            (nds, f) <- local (envAdd id $ zero t) (foldDecls ds)
+            return ((t, Init p id (Lit p (ezero t))):nds, f . (envAdd id $ zero t))
         foldDecls ((t, Init p id e):ds) = do
             ne <- foldE e
             (nds, f) <- local (envExp id ne) (foldDecls ds)
@@ -208,7 +215,6 @@ foldE (Var p id@(Ident _ n)) = do
     case m of
         Just Dynamic -> return (Var p id)
         Just (Constant l) -> return (Lit p l)
-        Just Undefined -> throw ("Use of uninitialised variable "++n, p)
         Nothing -> return (Var p id)
         _ -> error "This shouldn't happen in foldE"
 foldE (UnaryOp p op e) = do
@@ -255,11 +261,14 @@ foldE (BinaryOp p op el er) = do
     checkConst f (Lit _ x) (Lit _ y) r =
         case (x,y) of
             (Int p i, Int _ j) -> if f $ compare i j then return (true p)
-                                 else return (false p)
+                                  else return (false p)
+            (Byte p i, Byte _ j) -> if f $ compare i j then return (true p)
+                                    else return (false p)
             (Bool p i, Bool _ j) -> if f $ compare i j then return (true p)
                                  else return (false p)
             (String p i, String _ j) -> if f $ compare i j then return (true p)
                                  else return (false p)
+            _ -> throw ("WTF\n"++show r, BuiltIn)
     checkConst _ _ _ r = return r
     foldconsts :: BinOp Position -> [Expr Position] -> [Expr Position]
     foldconsts op@(Add _) ((Lit p (String _ i)):(Lit _ (String _ j)):xs) = foldconsts op $ (Lit p (String p (i ++ j))):xs
@@ -269,10 +278,12 @@ foldE (BinaryOp p op el er) = do
     foldconsts op@(Div _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i `div` j))):xs
     foldconsts op@(Mod _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i `mod` j))):xs
     foldconsts op@(And _) ((Lit p (Bool _ i)):(Lit _ (Bool _ j)):xs) = foldconsts op $ (Lit p (Bool p (i && j))):xs
+    foldconsts (And _) (f@(Lit _ (Bool _ True)):[]) = [f]
     foldconsts (And _) ((Lit _ (Bool _ True)):xs) = xs
     foldconsts (And _) (f@(Lit _ (Bool _ False)):xs) = [f]
     foldconsts op@(Or _) ((Lit p (Bool _ i)):(Lit _ (Bool _ j)):xs) = foldconsts op $ (Lit p (Bool p (i || j))):xs
     foldconsts (Or _) (f@(Lit _ (Bool _ True)):xs) = [f]
+    foldconsts (Or _) (f@(Lit _ (Bool _ False)):[]) = [f]
     foldconsts (Or _) ((Lit _ (Bool _ False)):xs) = xs
     foldconsts _ xs = xs
     specialExp :: Expr Position -> Expr Position

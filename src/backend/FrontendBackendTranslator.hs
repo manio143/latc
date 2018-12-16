@@ -8,7 +8,7 @@ import TypeChecker
 import qualified ProgramStructure as A
 import qualified LinearRepresentation as B
 
-translate :: A.Program a -> [Class] -> B.Program
+translate :: A.Program A.Position -> [Class] -> B.Program
 translate (A.Program _ defs) cls = evalState (processDefs defs cls) emptyState
 
 type SM = State Environment
@@ -27,7 +27,7 @@ emptyState = Env {varNameCounter = 0,
                   functions = []
                  }
 
-processDefs :: [A.Definition a] -> [Class] -> SM B.Program
+processDefs :: [A.Definition A.Position] -> [Class] -> SM B.Program
 processDefs defs cls = do
     structs <- getStructures cls
     funcs <- getFunctions defs
@@ -101,7 +101,7 @@ getFunctions defs = do
                     funcs <- functions <$> get
                     let name = "_"++clname++"_"++n
                     if elem name (map (\(B.Fun l _ _ _) ->l) funcs) then
-                        transF name args block
+                        transF name (A.Arg A.Undefined (A.ClassT A.Undefined (A.Ident A.Undefined clname)) (A.Ident A.Undefined "this") : args) block
                     else modify (\env -> env {functions = B.Fun name (ct t) [] [] : funcs})
         addBuiltInFunctionsHeaders = 
             modify (\env -> env {functions = bifs ++ functions env })
@@ -128,7 +128,7 @@ getFunctions defs = do
                 B.Fun "readString" B.Reference [] []
             ]
 
-transF :: String -> [A.Arg a] -> A.Block a -> SM ()
+transF :: String -> [A.Arg A.Position] -> A.Block A.Position -> SM ()
 transF name args block = do
     nargs <- processArgs args
     stmts <- execWriterT (emitB block)
@@ -163,13 +163,19 @@ newName t = do
     modify (\env -> env { varType = (n,t) : varType env})
     return n
 
-emitB :: A.Block a -> WriterT [B.Stmt] SM ()
+newLabel :: SM B.Label
+newLabel = do
+    i <- varNameCounter <$> get
+    modify (\env -> env { varNameCounter = i+1})
+    return ("L"++show i)
+
+emitB :: A.Block A.Position -> WriterT [B.Stmt] SM ()
 emitB (A.Block _ stmts) = mapM_ emitS stmts
 
 emitS (A.Empty _) = return ()
 emitS (A.VarDecl _ decls) = mapM_ emitVarDecl decls
     where
-        emitVarDecl :: (A.Type a, A.DeclItem a) -> WriterT [B.Stmt] SM ()
+        emitVarDecl :: (A.Type A.Position, A.DeclItem A.Position) -> WriterT [B.Stmt] SM ()
         emitVarDecl (t, A.NoInit _ (A.Ident _ x)) = do
             n <- lift $ newNameFor x (ct t)
             tell [B.VarDecl (ct t) n (B.Val (B.Const B.Null))]
@@ -196,7 +202,31 @@ emitS (A.ReturnValue _ e) = do
     tell [B.ReturnVal en]
 emitS (A.ReturnVoid _) = tell [B.Return]
 emitS (A.ExprStmt _ e) = emitE e >> return ()
-emitS _ = return ()
+emitS (A.BlockStmt _ b) = emitB b
+emitS (A.IfElse _ ec st sf) = do
+    enc <- emitE ec
+    case sf of
+        A.Empty _ -> do
+            lend <- lift $ newLabel
+            tell [B.JumpZero lend (B.Var enc)]
+            emitS st
+            tell [B.SetLabel lend]            
+        _ -> do
+            lelse <- lift $ newLabel
+            lend <- lift $ newLabel
+            tell [B.JumpZero lelse (B.Var enc)]
+            emitS st
+            tell [B.Jump lend, B.SetLabel lelse]
+            emitS sf
+            tell [B.SetLabel lend]
+emitS (A.While _ ec s) = do
+    lcond <- lift $ newLabel
+    lbegin <- lift $ newLabel
+    tell [B.Jump lcond, B.SetLabel lbegin]
+    emitS s
+    tell [B.SetLabel lcond]
+    enc <- emitE ec
+    tell [B.JumpNotZero lbegin (B.Var enc)]
 
 nameOf :: String -> WriterT [B.Stmt] SM String
 nameOf x = do
@@ -253,7 +283,7 @@ getFunType l = do
         if m == l then return t
         else funType l fs
 
-emitE :: A.Expr a -> WriterT [B.Stmt] SM B.Name
+emitE :: A.Expr A.Position -> WriterT [B.Stmt] SM B.Name
 emitE (A.Lit _ l) = do
     n <- lift $ newName (litType l)
     tell [B.VarDecl (litType l) n (B.Val (B.Const (litC l)))]
@@ -351,7 +381,29 @@ emitE (A.BinaryOp _ op el er) =
             tell [B.VarDecl ent n (B.BinOp bop (B.Var enl) (B.Var enr))]
             return n
     where
-        compare op el er = return "TODO"
+        compare op el er = do
+            enl <- emitE el
+            enr <- emitE er
+            ent <- typeOf enl
+            nb <- lift $ newName B.ByteT
+            nt <- lift $ newName ent
+            l <- lift $ newLabel
+            let (val, cond) = case op of
+                        A.Equ _ -> (1, B.JumpZero l (B.Var nt))
+                        A.Neq _ -> (1, B.JumpNotZero l (B.Var nt))
+                        A.Lt _ -> (1, B.JumpNeg l (B.Var nt))
+                        A.Gt _ -> (1, B.JumpPos l (B.Var nt))
+                        A.Le _ -> (0, B.JumpPos l (B.Var nt))
+                        A.Ge _ -> (0, B.JumpPos l (B.Var nt))
+            tell [
+                    B.VarDecl B.ByteT nb (B.Val (B.Const (B.ByteC val))),
+                    B.VarDecl ent nt (B.BinOp B.Sub (B.Var enl) (B.Var enr)),
+                    cond,
+                    B.Assign (B.Variable nb) (B.Val (B.Const (B.ByteC (if val == 1 then 0 else 1)))),
+                    B.SetLabel l
+                  ]
+            return nb
+
 emitE (A.App _ el es) = do
     ens <- mapM emitE es
     case el of
@@ -365,6 +417,5 @@ emitE (A.App _ el es) = do
             (l,i) <- getMethodInfo clsName m
             t <- lift $ getFunType l
             n <- lift $ newName t
-            tell [B.VarDecl t n (B.MCall en i (map B.Var ens))]
+            tell [B.VarDecl t n (B.MCall en i (map B.Var (en:ens)))]
             return n
-emitE _ = return "TODO"

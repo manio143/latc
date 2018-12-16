@@ -269,16 +269,19 @@ checkS (VarDecl pos decls) = do
         checkDecls (d@(t, Init pos id e):ds) = do
             checkRedeclaration id
             (ne, et) <- checkE e
-            nt <- case t of
+            (nt, nne) <- case t of
                     InfferedT _ -> case et of
                                     InfferedT _ -> throw ("Type cannot be inffered from null", pos)
-                                    _ -> return et
+                                    _ -> return (et, ne)
                     _ -> do
                         checkTypeExists NoVoid t
                         checkCastUp pos et t
-                        return t
+                        (cls,_,_) <- ask
+                        b <- lift $ equivalentType cls t et
+                        if b then return (t, ne)
+                        else return (t, Cast pos t ne)
             (nds, f) <- local (addVar id nt) (checkDecls ds)
-            return ((nt, Init pos id ne):nds, f . addVar id nt)
+            return ((nt, Init pos id nne):nds, f . addVar id nt)
         checkDecls [] = return ([], id)
 checkS (Assignment pos ase e) = do
     (nase, aset) <- checkE ase

@@ -31,13 +31,13 @@ data Stmt = VarDecl Type Name Expr
           | Return
           | SetLabel Label
           | Jump Label
-          | JumpCond Cond Value  -- comparing to 0
+          | JumpZero Label Value
+          | JumpNotZero Label Value
+          | JumpNeg Label Value
+          | JumpPos Label Value
           deriving (Eq, Ord, Show)
 
 data Target = Variable Name | Array Name Name | Member Name Offset
-    deriving (Eq, Ord, Show)
-
-data Cond = Eq | Ne | Lt | Gt | Le | Ge
     deriving (Eq, Ord, Show)
 
 data Expr = NewObj {-Type-}Label
@@ -56,7 +56,7 @@ data Expr = NewObj {-Type-}Label
 data Value = Const Constant | Var Name
     deriving (Eq, Ord)
 
-data Op = Add | Sub | Mul | Div | Mod | And | Or
+data Op = Add | Sub | Mul | Div | Mod | And | Or | Eq | Ne | Lt | Gt | Le | Ge
     deriving (Eq, Ord)
 
 data Constant = IntC Integer | ByteC Integer | StringC String | Null
@@ -74,7 +74,10 @@ linShowStmt (ReturnVal n) = "    return "++n
 linShowStmt (Return) = "    return"
 linShowStmt (SetLabel l) = "  "++l++":"
 linShowStmt (Jump l) = "    jump "++l
-linShowStmt (JumpCond c l) = "    jump "++show l++" if "++show c
+linShowStmt (JumpZero l v) = "    jump "++show l++" if "++show v ++" == 0"
+linShowStmt (JumpNotZero l v) = "    jump "++show l++" if "++show v ++" != 0"
+linShowStmt (JumpNeg l v) = "    jump "++show l++" if "++show v ++" < 0"
+linShowStmt (JumpPos l v) = "    jump "++show l++" if "++show v ++" > 0"
 
 linShowExp (Val v) = show v
 linShowExp (MemberAccess n o) = n++".field["++show o++"]"
@@ -105,3 +108,9 @@ instance Show Op where
     show Mod = "%"
     show And = "&&"
     show Or = "||"
+    show Eq = "=="
+    show Ne = "!="
+    show Lt = "<"
+    show Gt = ">"
+    show Le = "<="
+    show Ge = ">="
