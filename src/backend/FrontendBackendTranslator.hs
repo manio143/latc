@@ -1,4 +1,6 @@
-module FrontendBackendTranslator (translate) where
+module FrontendBackendTranslator (translate, builtInFunctions) where
+
+-- Remove builtInFunctions from list when emitting x86
 
 import Data.List ((\\), findIndex)
 import Control.Monad.State
@@ -72,7 +74,7 @@ getStructures cls = mapM_ getStructure cls >> structures <$> get
                             case t of
                                 B.IntT -> o + 0x04
                                 B.ByteT -> o + 0x01
-                                B.Reference -> o + 0x14
+                                B.Reference -> o + 0x08 -- pointer size
 
 stripClassName pm = case findIndex (== '_') (drop 1 pm) of
                         Just i -> drop (i+2) pm
@@ -104,29 +106,33 @@ getFunctions defs = do
                         transF name (A.Arg A.Undefined (A.ClassT A.Undefined (A.Ident A.Undefined clname)) (A.Ident A.Undefined "this") : args) block
                     else modify (\env -> env {functions = B.Fun name (ct t) [] [] : funcs})
         addBuiltInFunctionsHeaders = 
-            modify (\env -> env {functions = bifs ++ functions env })
-        bifs = [
-                B.Fun "_Array_toString" B.Reference [] [],
-                B.Fun "_Object_toString" B.Reference [] [],
-                B.Fun "_Object_getHashCode" B.IntT [] [],
-                B.Fun "_Object_equals" B.ByteT [] [],
-                B.Fun "_String_substring" B.Reference [] [],
-                B.Fun "_String_length" B.IntT [] [],
-                B.Fun "_String_indexOf" B.IntT [] [],
-                B.Fun "_String_getBytes" B.Reference [] [],
-                B.Fun "_String_endsWith" B.ByteT [] [],
-                B.Fun "_String_startsWith" B.ByteT [] [],
-                B.Fun "_String_concat" B.Reference [] [],
-                B.Fun "_String_charAt" B.IntT [] [],
-                B.Fun "printString" B.ByteT [] [],
-                B.Fun "printInt" B.ByteT [] [],
-                B.Fun "printByte" B.ByteT [] [],
-                B.Fun "printBoolean" B.ByteT [] [],
-                B.Fun "print" B.ByteT [] [],
-                B.Fun "error" B.ByteT [] [],
-                B.Fun "readInt" B.IntT [] [],
-                B.Fun "readString" B.Reference [] []
-            ]
+            modify (\env -> env {functions = builtInFunctions ++ functions env })
+builtInFunctions =
+    [
+        B.Fun "_Array_toString" B.Reference [] [],
+        B.Fun "_Object_toString" B.Reference [] [],
+        B.Fun "_Object_getHashCode" B.IntT [] [],
+        B.Fun "_Object_equals" B.ByteT [] [],
+        B.Fun "_String_equals" B.ByteT [] [],
+        B.Fun "_String_getHashCode" B.IntT [] [],
+        B.Fun "_String_toString" B.Reference [] [],
+        B.Fun "_String_substring" B.Reference [] [],
+        B.Fun "_String_length" B.IntT [] [],
+        B.Fun "_String_indexOf" B.IntT [] [],
+        B.Fun "_String_getBytes" B.Reference [] [],
+        B.Fun "_String_endsWith" B.ByteT [] [],
+        B.Fun "_String_startsWith" B.ByteT [] [],
+        B.Fun "_String_concat" B.Reference [] [],
+        B.Fun "_String_charAt" B.IntT [] [],
+        B.Fun "printString" B.ByteT [] [],
+        B.Fun "printInt" B.ByteT [] [],
+        B.Fun "printByte" B.ByteT [] [],
+        B.Fun "printBoolean" B.ByteT [] [],
+        B.Fun "print" B.ByteT [] [],
+        B.Fun "error" B.ByteT [] [],
+        B.Fun "readInt" B.IntT [] [],
+        B.Fun "readString" B.Reference [] []
+      ]
 
 transF :: String -> [A.Arg A.Position] -> A.Block A.Position -> SM ()
 transF name args block = do

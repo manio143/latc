@@ -134,17 +134,21 @@ addBuiltInTypes types = builtIn ++ types
                 ],
                 Class (name "String") (Just (name "Object")) [
                     Method (name "charAt") int [int],
+                    Method (name "equals") bool [class_ "Object"],
                     Method (name "concat") (class_ "String") [class_ "String"],
                     Method (name "startsWith") bool [class_ "String"],
                     Method (name "endsWith") bool [class_ "String"],
                     Method (name "getBytes") (array byte) [],
                     Method (name "indexOf") int [class_ "String", int],
                     Method (name "length") int [],
-                    Method (name "substring") (class_ "String") [int, int]
+                    Method (name "substring") (class_ "String") [int, int],
+                    Method (name "toString") string [],
+                    Method (name "getHashCode") int []
                 ],
                 Class (name "Array") (Just (name "Object")) [
+                    Field (name "elements") object,
                     Field (name "length") int,
-                    Field (name "padding") int,
+                    Field (name "elementSize") int,
                     Method (name "toString") string []
                 ]
             ]
@@ -170,8 +174,8 @@ addBuiltInFunctions funs = builtIn ++ funs
         builtIn = [
                 Fun (name "printString") void [string],
                 Fun (name "printInt") void [int],
-                Fun (name "printByte") void [byte],
                 Fun (name "printBoolean") void [bool],
+                Fun (name "intToString") string [int],
                 Fun (name "print") void [object],
                 Fun (name "error") void [],
                 Fun (name "readInt") int [],
