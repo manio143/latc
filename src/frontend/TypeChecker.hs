@@ -526,7 +526,9 @@ checkE (NewObj pos t m) = do
     case m of
         Nothing -> do
             case t of
-                ClassT _ _ -> return ()
+                ClassT _ (Ident _ n) -> if n /= "String" then return ()
+                else throw ("Cannot instantiate an empty String", pos)
+                StringT _ -> throw ("Cannot instantiate an empty String", pos)
                 _ -> throw ("Expected a class", pos)
             return (NewObj pos t m, t)
         Just e -> do
@@ -613,6 +615,8 @@ checkEisLValue pos (Member _ e (Ident _ n) (Just clsName)) = do
         members = concat $ map (\(Class _ _ mems) -> mems) h
     if field members n then return ()
     else throw ("Illegal assignment to a method", pos)
+    if clsName == "Array" then throw ("Fields of the array objects are immutable", pos)
+    else return ()
     where
         field ((Field (Ident _ k) _):r) n = 
             if k == n then True

@@ -11,11 +11,14 @@ extern struct Type _class_Array;
 extern struct Type _class_Object;
 extern struct Type _class_String;
 
+typedef obj (*toStringPtr)(obj);
+
 char *errMsg;
 
 obj __new(struct Type *t) {
     obj r = malloc(sizeof(struct Reference));
     r->type = t;
+    r->counter = 0;
     if (t->dataSize > 0) {
         r->data = malloc(t->dataSize);
         bzero(r->data, t->dataSize);
@@ -73,8 +76,8 @@ obj __createString(char *c) {
     struct String *str = malloc(sizeof(struct String));
     r->data = str;
     str->length = u8_strlen(c);
-    if (u8_check(c, str->length) == NULL) {
-        errMsg = "ERROR: Non-unicode string encodeing.";
+    if (u8_check(c, str->length) != NULL) {
+        errMsg = "ERROR: Non-unicode string encoding.";
         error();
     }
     if (str->length > 0) {
@@ -119,7 +122,7 @@ obj _Array_toString(obj arr) {
         } else {
             obj *elements = array->elements;
             obj element = elements[i];
-            obj (*toString)(obj) = element->type->methods;
+            obj (*toString)(obj) = ((void **)element->type->methods)[0];
             strings[i] = toString(element);
         }
         __incRef(strings[i]);
@@ -171,7 +174,7 @@ int8_t _String_equals(obj o1, obj o2) {
         return false;
     uint8_t *rs1 = ((struct String *)o1->data)->data;
     uint8_t *rs2 = ((struct String *)o2->data)->data;
-    return u8_strcmp(rs1, rs2);
+    return u8_strcmp(rs1, rs2) == 0;
 }
 obj _String_substring(obj str, int32_t startIndex, int32_t length) {
     if (length < 0) {
@@ -199,9 +202,10 @@ obj _String_substring(obj str, int32_t startIndex, int32_t length) {
         end += u8_next(&character, end) - end;
         counter++;
     }
-    uint8_t *buffer = malloc(end - offset_str + 1);
-    u8_strncpy(buffer, offset_str, sizeof(buffer));
-    buffer[sizeof(buffer) - 1] = 0;
+    int32_t bufferSize = end - offset_str + 1;
+    uint8_t *buffer = malloc(bufferSize);
+    u8_strncpy(buffer, offset_str, bufferSize);
+    buffer[bufferSize - 1] = 0;
     obj ret = __createString(buffer);
     free(buffer);
     return ret;
@@ -300,7 +304,7 @@ obj intToString(int32_t i) {
 }
 
 int8_t print(obj o) {
-    obj (*toStr)(obj) = o->type->methods;
+    obj (*toStr)(obj) = ((void **)o->type->methods)[0];
     obj str = toStr(o);
     __incRef(str);
     printString(str);
