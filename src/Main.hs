@@ -20,6 +20,8 @@ import ConstantFolder
 import ReturnChecker
 import qualified LinearRepresentation as L
 import FrontendBackendTranslator
+import CommonExpSubstitution
+import ValuePropagation
 
 main = do
     args <- getArgs
@@ -42,7 +44,10 @@ process args = do
             putStrLn (S.printi 0 ast)
             putStrLn "\n--------------------\n"
             let linear = translate ast cls
-            putStrLn (L.linShow linear)
+                lin2 = propagateValues linear
+                lin3 = subCommonExps lin2
+                lin4 = propagateValues lin3
+            putStrLn (L.linShow lin4)
 
 processAST progs = do
     let ast = desugar progs

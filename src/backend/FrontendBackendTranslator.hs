@@ -169,11 +169,11 @@ newName t = do
     modify (\env -> env { varType = (n,t) : varType env})
     return n
 
-newLabel :: SM B.Label
-newLabel = do
+newLabel :: String -> SM B.Label
+newLabel prefix= do
     i <- varNameCounter <$> get
     modify (\env -> env { varNameCounter = i+1})
-    return ("L"++show i)
+    return (prefix++show i)
 
 emitB :: A.Block A.Position -> WriterT [B.Stmt] SM ()
 emitB (A.Block _ stmts) = mapM_ emitS stmts
@@ -205,7 +205,7 @@ emitS (A.Assignment _ el er) = do
             tell [B.Assign (B.Member enm off) (B.Val (B.Var en))]
 emitS (A.ReturnValue _ e) = do
     en <- emitE e
-    tell [B.ReturnVal en]
+    tell [B.ReturnVal (B.Val (B.Var en))]
 emitS (A.ReturnVoid _) = tell [B.Return]
 emitS (A.ExprStmt _ e) = emitE e >> return ()
 emitS (A.BlockStmt _ b) = emitB b
@@ -213,21 +213,21 @@ emitS (A.IfElse _ ec st sf) = do
     enc <- emitE ec
     case sf of
         A.Empty _ -> do
-            lend <- lift $ newLabel
+            lend <- lift $ newLabel "I"
             tell [B.JumpZero lend (B.Var enc)]
             emitS st
             tell [B.SetLabel lend]            
         _ -> do
-            lelse <- lift $ newLabel
-            lend <- lift $ newLabel
+            lelse <- lift $ newLabel "I"
+            lend <- lift $ newLabel "I"
             tell [B.JumpZero lelse (B.Var enc)]
             emitS st
             tell [B.Jump lend, B.SetLabel lelse]
             emitS sf
             tell [B.SetLabel lend]
 emitS (A.While _ ec s) = do
-    lcond <- lift $ newLabel
-    lbegin <- lift $ newLabel
+    lcond <- lift $ newLabel "W"
+    lbegin <- lift $ newLabel "W"
     tell [B.Jump lcond, B.SetLabel lbegin]
     emitS s
     tell [B.SetLabel lcond]
@@ -393,7 +393,7 @@ emitE (A.BinaryOp _ op el er) =
             ent <- typeOf enl
             nb <- lift $ newName B.ByteT
             nt <- lift $ newName ent
-            l <- lift $ newLabel
+            l <- lift $ newLabel "C"
             let (val, cond) = case op of
                         A.Equ _ -> (1, B.JumpZero l (B.Var nt))
                         A.Neq _ -> (1, B.JumpNotZero l (B.Var nt))
