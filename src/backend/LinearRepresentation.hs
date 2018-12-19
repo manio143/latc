@@ -7,7 +7,7 @@ module LinearRepresentation where
 import Data.List (intercalate)
 
 
-data Program = Program [Structure] [Function]
+data Program = Program [Structure] [Function] [(Label, String)]
     deriving (Eq, Ord, Show)
 
 data Structure = Struct Label Size [(Label, Type, Offset)] [{-method-}Label]
@@ -51,6 +51,7 @@ data Expr = NewObj {-Type-}Label
           | ByteToInt Value
           | Not Value
           | BinOp Op Value Value
+          | Cast {-Type-}Label Value
     deriving (Eq, Ord, Show)
 
 data Value = Const Constant | Var Name
@@ -59,10 +60,10 @@ data Value = Const Constant | Var Name
 data Op = Add | Sub | Mul | Div | Mod | And | Or | Eq | Ne | Lt | Gt | Le | Ge
     deriving (Eq, Ord)
 
-data Constant = IntC Integer | ByteC Integer | StringC String | Null
+data Constant = IntC Integer | ByteC Integer | StringC Label | Null
     deriving (Eq, Ord, Show)
 
-linShow (Program ss fs) = intercalate "\n" (map linShowStruct ss) ++ intercalate "\n" (map linShowFun fs)
+linShow (Program ss fs strs) = intercalate "\n" (map linShowStruct ss) ++"\n"++ intercalate "\n" (map linShowFun fs) ++ "\n" ++ (concat $ map (\(l,s) -> l++": "++show s++"\n") strs)
 
 linShowStruct (Struct l _ fs ms) = "struct "++l++"\n"++(concat $ map (\(l,t,_)-> "    "++show t++" "++l++";\n") fs)++(concat $ map (\l->"    "++l++"(...)\n") ms)
 

@@ -1,4 +1,4 @@
-module ValuePropagation (propagateValues) where
+module ValuePropagation (propagateValues, used, assigned, declared) where
 
 import Control.Monad.State
 import Debug.Trace
@@ -6,7 +6,7 @@ import Debug.Trace
 import LinearRepresentation
 
 propagateValues :: Program -> Program
-propagateValues (Program s fs) = Program s (map prop fs)
+propagateValues (Program s fs strs) = Program s (map prop fs) strs
 
 prop (Fun l t args stmts) = Fun l t args (propS stmts)
 
@@ -46,7 +46,10 @@ propS stmts =
                 JumpPos l v -> do
                     v' <- updatedVal v
                     return (JumpPos l v')
-                SetLabel ('W':_) -> clear >> return s
+                SetLabel ('_':'W':_) -> do
+                    let assignedInFuture = concat $ map assigned ss
+                    clear assignedInFuture
+                    return s
                 _ -> return s
         walk ss (s':seen)
     walk [] seen = return $ removeUnused $ reverse seen
@@ -59,40 +62,50 @@ propS stmts =
         where
             without n (e@(m, _):r) | n == m = r
             without n (e:r) = e : without n r
-    clear = put []
+            without n [] = []
+    clear :: [Name] -> SM ()
+    clear a = modify (\s -> filter (\(n,_) -> not $ elem n a) s)
     removeUnused stmts =
         let u = foldl (\a s -> used s ++ a) [] stmts
         in filter (isUsed u) stmts
         where
-            used (VarDecl t n e@(Call _ _)) = n : usedE e
-            used (VarDecl t n e@(MCall _ _ _)) = n : usedE e
-            used (VarDecl t n e) = usedE e
-            used (Assign t e) = usedE e
-            used (ReturnVal e) = usedE e
-            used (JumpZero l v) = usedV v
-            used (JumpNotZero l v) = usedV v
-            used (JumpNeg l v) = usedV v
-            used (JumpPos l v) = usedV v
-            used _ = []
-
-            usedV (Var n) = [n]
-            usedV _ = []
-
-            usedE (NewArray _ v) = usedV v
-            usedE (Val v) = usedV v
-            usedE (Call _ vs) = concat $ map usedV vs
-            usedE (MCall n i vs) = concat $ map usedV vs
-            usedE (ArrAccess n v) = n : usedV v
-            usedE (MemberAccess n _) = [n]
-            usedE (IntToByte v) = usedV v
-            usedE (ByteToInt v) = usedV v
-            usedE (Not v) = usedV v
-            usedE (BinOp _ v1 v2) = usedV v1 ++ usedV v2
-            usedE _ = []
-
             isUsed u (VarDecl _ n _) = elem n u
             isUsed u (Assign (Variable n) _) = elem n u
             isUsed _ _ = True
+
+used (VarDecl t n e@(Call _ _)) = n : usedE e
+used (VarDecl t n e@(MCall _ _ _)) = n : usedE e
+used (VarDecl t n e) = usedE e
+used (Assign t e) = usedE e
+used (ReturnVal e) = usedE e
+used (JumpZero l v) = usedV v
+used (JumpNotZero l v) = usedV v
+used (JumpNeg l v) = usedV v
+used (JumpPos l v) = usedV v
+used _ = []
+
+usedV (Var n) = [n]
+usedV _ = []
+
+usedE (NewArray _ v) = usedV v
+usedE (Val v) = usedV v
+usedE (Call _ vs) = concat $ map usedV vs
+usedE (MCall n i vs) = concat $ map usedV vs
+usedE (ArrAccess n v) = n : usedV v
+usedE (MemberAccess n _) = [n]
+usedE (IntToByte v) = usedV v
+usedE (ByteToInt v) = usedV v
+usedE (Not v) = usedV v
+usedE (BinOp _ v1 v2) = usedV v1 ++ usedV v2
+usedE (Cast _ v) = usedV v
+usedE _ = []
+
+assigned (VarDecl _ n _) = [n]
+assigned (Assign (Variable n) _) = [n]
+assigned _ = []
+
+declared (VarDecl _ n _) = [n]
+declared _ = []
 
 propE :: Expr -> SM Expr
 propE (NewArray t v) = do
@@ -106,10 +119,12 @@ propE (Call l vs) = do
     return (Call l vs')
 propE (MCall n idx vs) = do
     vs' <- mapM updatedVal vs
-    return (MCall n idx vs')
+    (Var m) <- updatedVal (Var n)
+    return (MCall m idx vs')
 propE (ArrAccess n v) = do
     v' <- updatedVal v
-    return (ArrAccess n v')
+    (Var m) <- updatedVal (Var n)
+    return (ArrAccess m v')
 propE (IntToByte v) = updatedVal v >>= return . IntToByte
 propE (ByteToInt v) = updatedVal v >>= return . ByteToInt
 propE (Not v) = updatedVal v >>= return . Not
@@ -127,6 +142,7 @@ propE (BinOp op v1 v2) = do
 propE (MemberAccess n o) = do
     (Var m) <- updatedVal (Var n)
     return (MemberAccess m o)
+propE (Cast l v) = updatedVal v >>= return . Cast l
 propE e = return e
 
 updatedVal (Var n) = do

@@ -6,7 +6,7 @@ import Control.Monad.State
 import LinearRepresentation
 
 subCommonExps :: Program -> Program
-subCommonExps (Program structs funcs) = Program structs (map sub funcs)
+subCommonExps (Program structs funcs strs) = Program structs (map sub funcs) strs
 
 sub (Fun l t args stmts) = Fun l t args (subS stmts)
 

@@ -22,6 +22,8 @@ import qualified LinearRepresentation as L
 import FrontendBackendTranslator
 import CommonExpSubstitution
 import ValuePropagation
+import qualified Assembly as X
+import Emit
 
 main = do
     args <- getArgs
@@ -48,6 +50,7 @@ process args = do
                 lin3 = subCommonExps lin2
                 lin4 = propagateValues lin3
             putStrLn (L.linShow lin4)
+            putStrLn (X.printX86 $ emit lin4)
 
 processAST progs = do
     let ast = desugar progs

@@ -1,4 +1,4 @@
-module FrontendBackendTranslator (translate, builtInFunctions) where
+module FrontendBackendTranslator (translate) where
 
 -- Remove builtInFunctions from list when emitting x86
 
@@ -19,21 +19,24 @@ data Environment = Env {
     varMap :: [(String, String)],
     varType :: [(String, B.Type)],
     structures :: [B.Structure],
-    functions :: [B.Function]
+    functions :: [B.Function],
+    strings :: [(String, B.Label)]
     }
 
 emptyState = Env {varNameCounter = 0, 
                   varMap = [], 
                   varType = [],
                   structures = [],
-                  functions = []
+                  functions = [],
+                  strings = []
                  }
 
 processDefs :: [A.Definition A.Position] -> [Class] -> SM B.Program
 processDefs defs cls = do
     structs <- getStructures cls
     funcs <- getFunctions defs
-    return (B.Program structs funcs)
+    strs <- (strings <$> get) >>= \s -> return $ map (\(a,b)->(b,a)) s
+    return (B.Program structs (funcs \\ builtInFunctions) strs)
 
 getStructures cls = mapM_ getStructure cls >> structures <$> get
     where
@@ -213,21 +216,21 @@ emitS (A.IfElse _ ec st sf) = do
     enc <- emitE ec
     case sf of
         A.Empty _ -> do
-            lend <- lift $ newLabel "I"
+            lend <- lift $ newLabel "_I"
             tell [B.JumpZero lend (B.Var enc)]
             emitS st
             tell [B.SetLabel lend]            
         _ -> do
-            lelse <- lift $ newLabel "I"
-            lend <- lift $ newLabel "I"
+            lelse <- lift $ newLabel "_I"
+            lend <- lift $ newLabel "_I"
             tell [B.JumpZero lelse (B.Var enc)]
             emitS st
             tell [B.Jump lend, B.SetLabel lelse]
             emitS sf
             tell [B.SetLabel lend]
 emitS (A.While _ ec s) = do
-    lcond <- lift $ newLabel "W"
-    lbegin <- lift $ newLabel "W"
+    lcond <- lift $ newLabel "_W"
+    lbegin <- lift $ newLabel "_W"
     tell [B.Jump lcond, B.SetLabel lbegin]
     emitS s
     tell [B.SetLabel lcond]
@@ -292,7 +295,8 @@ getFunType l = do
 emitE :: A.Expr A.Position -> WriterT [B.Stmt] SM B.Name
 emitE (A.Lit _ l) = do
     n <- lift $ newName (litType l)
-    tell [B.VarDecl (litType l) n (B.Val (B.Const (litC l)))]
+    c <- litC l
+    tell [B.VarDecl (litType l) n (B.Val (B.Const c))]
     return n
   where
     litType l = case l of 
@@ -301,13 +305,21 @@ emitE (A.Lit _ l) = do
                     A.Int _ _ -> B.IntT
                     A.Byte _ _ -> B.ByteT
                     A.Bool _ _ -> B.ByteT
+    litC :: A.Lit A.Position -> WriterT [B.Stmt] SM B.Constant
     litC l = case l of
-                A.String _ s -> B.StringC s
-                A.Null _ -> B.Null
-                A.Int _ i -> B.IntC i
-                A.Byte _ i -> B.ByteC i
-                A.Bool _ True -> B.ByteC 1
-                A.Bool _ False -> B.ByteC 0
+                A.String _ s -> do
+                    strs <- strings <$> get
+                    case lookup s strs of
+                        Just l -> return $ B.StringC l
+                        Nothing -> do
+                            l <- lift $ newLabel "_S"
+                            modify (\env -> env{ strings = (s,l) : strs})
+                            return $ B.StringC l
+                A.Null _ -> return B.Null
+                A.Int _ i -> return $ B.IntC i
+                A.Byte _ i -> return $ B.ByteC i
+                A.Bool _ True -> return $ B.ByteC 1
+                A.Bool _ False -> return $ B.ByteC 0
 emitE (A.Var _ (A.Ident _ x)) = nameOf x
 emitE (A.Member _ e (A.Ident _ field) (Just className)) = do
     enm <- emitE e
@@ -341,7 +353,12 @@ emitE (A.Cast _ t e) = do
     case (ct t, ent) of
         (B.ByteT, B.ByteT) -> return en
         (B.IntT, B.IntT) -> return en
-        (B.Reference, B.Reference) -> return en
+        (B.Reference, B.Reference) -> 
+            case t of
+                A.ClassT _ (A.Ident _ clsName) -> do
+                    n <- lift $ newName B.Reference
+                    tell [B.VarDecl B.Reference n (B.Cast ("_class_"++clsName) (B.Var en))]
+                    return n
         (B.ByteT, B.IntT) -> do
             n <- lift $ newName B.ByteT
             tell [B.VarDecl B.ByteT n (B.IntToByte (B.Var en))]
@@ -393,7 +410,7 @@ emitE (A.BinaryOp _ op el er) =
             ent <- typeOf enl
             nb <- lift $ newName B.ByteT
             nt <- lift $ newName ent
-            l <- lift $ newLabel "C"
+            l <- lift $ newLabel "_C"
             let (val, cond) = case op of
                         A.Equ _ -> (1, B.JumpZero l (B.Var nt))
                         A.Neq _ -> (1, B.JumpNotZero l (B.Var nt))
