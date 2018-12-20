@@ -19,7 +19,7 @@ obj __new(struct Type *t) {
     obj r = malloc(sizeof(struct Reference));
     r->type = t;
     r->counter = 0;
-    if (t->dataSize > 0) {
+    if (t->dataSize > 0 && t != &_class_Array && t != &_class_String) {
         r->data = malloc(t->dataSize);
         bzero(r->data, t->dataSize);
     } else {
@@ -71,6 +71,25 @@ obj __newArray(int32_t size, int32_t length) {
     return r;
 }
 
+void *__getelementptr(obj array, int32_t index) {
+    struct Array *arr = ((struct Array *)array->data);
+    if (index >= arr->length || index < 0) {
+        errMsg = "ERROR: Array index out of range.";
+        error();
+    }
+    return arr->elements + index * arr->elementSize;
+}
+
+obj __cast(obj o, struct Type *t) {
+    struct Type *to = o->type;
+    while (to != NULL) {
+        if (t == to)
+            return o;
+        to = to->parent;
+    }
+    return NULL;
+}
+
 obj __createString(char *c) {
     obj r = __new(&_class_String);
     struct String *str = malloc(sizeof(struct String));
@@ -81,7 +100,9 @@ obj __createString(char *c) {
         error();
     }
     if (str->length > 0) {
-        str->data = u8_cpy_alloc(c, str->length);
+        str->data = malloc(str->length + 1);
+        u8_strncpy(str->data, c, str->length);
+        str->data[str->length] = 0;
     } else
         str->data = NULL;
     str->length = 0;

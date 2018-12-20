@@ -2,6 +2,7 @@
 #include <inttypes.h>
 
 struct Type {
+    struct Type *parent;
     int32_t dataSize;
     void *methods;
 };
@@ -35,6 +36,10 @@ obj __newRefArray();
 obj __newIntArray();
 obj __newByteArray();
 obj __newArray(int32_t size, int32_t length);
+
+void *__getelementptr(obj array, int32_t index);
+
+obj __cast(obj o, struct Type *t);
 
 obj __createString(char *c);
 

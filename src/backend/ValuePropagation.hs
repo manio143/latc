@@ -66,23 +66,29 @@ propS stmts =
     clear :: [Name] -> SM ()
     clear a = modify (\s -> filter (\(n,_) -> not $ elem n a) s)
     removeUnused stmts =
-        let u = foldl (\a s -> used s ++ a) [] stmts
+        let u = foldl (\a s -> used' s ++ a) [] stmts
         in filter (isUsed u) stmts
         where
             isUsed u (VarDecl _ n _) = elem n u
             isUsed u (Assign (Variable n) _) = elem n u
             isUsed _ _ = True
 
-used (VarDecl t n e@(Call _ _)) = n : usedE e
-used (VarDecl t n e@(MCall _ _ _)) = n : usedE e
+used' (VarDecl t n e@(Call _ _)) = n : usedE e
+used' (VarDecl t n e@(MCall _ _ _)) = n : usedE e
+used' e = used e
+
 used (VarDecl t n e) = usedE e
-used (Assign t e) = usedE e
+used (Assign t e) = usedT t ++ usedE e
 used (ReturnVal e) = usedE e
 used (JumpZero l v) = usedV v
 used (JumpNotZero l v) = usedV v
 used (JumpNeg l v) = usedV v
 used (JumpPos l v) = usedV v
 used _ = []
+
+usedT (Array n n2) = [n,n2]
+usedT (Member n _) = [n]
+usedT _ = []
 
 usedV (Var n) = [n]
 usedV _ = []
@@ -134,7 +140,6 @@ propE (BinOp op v1 v2) = do
     case (op, v1, v2) of
         (Add, (Const (IntC 0)), _) -> return (Val v2)
         (Add, _, (Const (IntC 0))) -> return (Val v1)
-        (Sub, (Const (IntC 0)), _) -> return (Val v2)
         (Sub, _, (Const (IntC 0))) -> return (Val v1)
         (Mul, (Const (IntC 1)), _) -> return (Val v2)
         (Mul, _, (Const (IntC 1))) -> return (Val v1)

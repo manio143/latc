@@ -38,8 +38,10 @@ type SM = StateT [(Name, [X.Value])] (Writer [X.Instruction])
 
 emitB args body = do
     let liveness = analize body
+        withRefCounters = addRefCounters liveness args
         regMap = mapArgs args
-    trace (concat $ map (\(s,l) -> linShowStmt s ++"   "++show l++"\n") liveness) evalStateT (mapM_ emitI liveness) regMap
+        alreg = allocateRegisters withRefCounters regMap
+    trace (concat $ map (\(s,li,lo) -> linShowStmt s ++"   "++show li++"   "++show lo++"\n") alreg) evalStateT (mapM_ emitI alreg) regMap
 
 mapArgs as = map (\((_,n),v)->(n,[v])) zas
   where
@@ -54,15 +56,77 @@ st ByteT = 0x01
 st Reference = 0x08
 
 
-analize :: [Stmt] -> [(Stmt, [Name])]
-analize stmts = walk [] [] (reverse stmts)
+analize :: [Stmt] -> [(Stmt, [Name],[Name])]
+analize stmts = 
+    let indexed = zip stmts [1..]
+        succ = map (findSucc indexed) indexed
+        inout = map (\(s,i,n) -> (s,i,n,[],[])) succ
+    in map (\(s,_,_,tin,tout)->(s,tin,tout)) $ work inout
   where
-    walk acc live (s:ss) = 
-        let u = used s
-            a = declared s
-            nl = (nub $ live ++ u) \\ a
-        in walk ((s, nl):acc) nl ss
-    walk acc _ [] = acc
+    findSucc ind (s,i) = 
+        case s of
+            Jump l -> (s,i,[findIndex ind (SetLabel l)])
+            JumpZero l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
+            JumpNotZero l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
+            JumpNeg l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
+            JumpPos l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
+            _ -> (s,i,[i+1])
+    findIndex ind s = snd $ head $ filter (\(s',i)->s==s') ind
+    work :: [(Stmt, Integer,[Integer],[Name],[Name])] -> [(Stmt, Integer,[Integer],[Name],[Name])]
+    work inout =
+        let ninout = map (proc inout) inout in
+        if ninout /= inout then work ninout
+        else ninout
+    proc inout (s,i,n,tin,tout) =
+        let succ = concat $ map (\nn -> filter (\(_,ii,_,_,_) -> nn == ii) inout) n
+            succin = map (\(_,_,_,sin,_)->sin) succ
+        in (s,i,n,nub $ used s ++ (tout \\ assigned s),nub $ concat succin)
 
-emitI :: (Stmt, [Name]) -> SM ()
+addRefCounters :: [(Stmt, [Name],[Name])] -> [(Type,Name)] -> [(Stmt, [Name],[Name])]
+addRefCounters ss args = evalState run 0
+  where
+    run = do
+        (a,r) <- incArgs args
+        walk ss r a
+    incArgs ((Reference, n):as) = do
+        if isLive n then do
+            i <- incr n
+            (rs, refs) <- incArgs as
+            return $ (i : rs, n:refs)
+        else incArgs as
+        where
+            isLive n = let (_,tin,_) = head ss in elem n tin
+    incArgs (_:as) = incArgs as
+    incArgs [] = return ([],[])
+    walk ((s,tin,tout):ss) refs acc = do
+        let dead = filter (\i -> not $ elem i tout) tin
+        ds <- kill dead refs
+        case s of
+            VarDecl Reference n _ -> do
+                i <- incr n
+                if elem n tout then
+                    walk ss (n:refs) (ds ++ i : s : acc)
+                else do
+                    d <- decr n
+                    walk ss refs (ds ++ d : i : s : acc)
+            _ -> walk ss refs (ds ++ s : acc)
+    walk [] _ acc = return $ analize (reverse acc)
+    newVar :: State Int String
+    newVar = do
+        i <- get
+        put (i+1)
+        return ("c"++show i)
+    decr n = do
+        x <- newVar
+        return (VarDecl ByteT x (Call "__decRef" [Var n]))
+    incr n = do
+        x <- newVar
+        return (VarDecl ByteT x (Call "__incRef" [Var n]))
+    kill dead refs = do
+        let deadrefs = filter (\d -> elem d refs) dead
+        mapM decr deadrefs
+
+allocateRegisters a _ = a
+
+emitI :: (Stmt, [Name],[Name]) -> SM ()
 emitI _ = return ()

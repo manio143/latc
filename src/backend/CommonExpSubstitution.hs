@@ -50,6 +50,11 @@ subS stmts = evalState (walk stmts []) []
     walk [] seen = return $ reverse seen
     find :: Expr -> SM (Maybe Name)
     find (Val (Const _)) = return Nothing
+    find (NewObj _) = return Nothing
+    find (NewArray _ _) = return Nothing
+    find (Call _ _) = return Nothing
+    find (MCall _ _ _) = return Nothing
+    find (MemberAccess _ _) = return Nothing
     find e = do
         st <- get
         return $ lookup e st
