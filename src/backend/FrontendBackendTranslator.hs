@@ -46,16 +46,17 @@ getStructures cls = mapM_ getStructure cls >> structures <$> get
                                     Nothing -> return ([],[])
                                     Just (A.Ident _ pid) -> case findStruct pid structs of
                                         Nothing -> do 
-                                            (B.Struct _ _ fs ms) <- getStructure (clas pid)
+                                            (B.Struct _ _ _ fs ms) <- getStructure (clas pid)
                                             return (fs, ms)
-                                        Just (B.Struct _ _ fs ms) -> return (fs, ms)
+                                        Just (B.Struct _ _ _ fs ms) -> return (fs, ms)
             let (fields, methods) = getMembers mems
                 fs = offset fields pfields
-                s = B.Struct ("_class_"++id) (offFs fs) fs(mergeMeths id pmethods methods)
+                par = mp >>= (\(A.Ident _ pid) -> return $ "_class_"++pid)
+                s = B.Struct ("_class_"++id) par (offFs fs) fs(mergeMeths id pmethods methods)
             add s
             return s
         clas m = head $ filter (\(Class (A.Ident _ n) _ _) -> n == m) cls
-        findStruct pid (s@(B.Struct lab _ _ _):ss) = 
+        findStruct pid (s@(B.Struct lab _ _ _ _):ss) = 
             if lab == "_class_"++pid then Just s
             else findStruct pid ss
         findStruct _ [] = Nothing
@@ -201,7 +202,7 @@ emitS (A.Assignment _ el er) = do
         A.ArrAccess _ earr eidx _ -> do
             enarr <- emitE earr
             enidx <- emitE eidx
-            tell [B.Assign (B.Array enarr enidx) (B.Val (B.Var en))]
+            tell [B.Assign (B.Array enarr (B.Var enidx)) (B.Val (B.Var en))]
         A.Member _ em (A.Ident _ field) (Just className) -> do
             enm <- emitE em
             off <- getOffset className field
@@ -255,7 +256,7 @@ typeOf x = do
 getMethodInfo :: String -> String -> WriterT [B.Stmt] SM (B.Label, B.Index)
 getMethodInfo clsName m = do
     structs <- structures <$> get
-    let (B.Struct _ _ _ ms) = lookupStruct structs ("_class_"++clsName)
+    let (B.Struct _ _ _ _ ms) = lookupStruct structs ("_class_"++clsName)
     return (lookupMethod ms m 0)
   where
     lookupMethod (mm:ms) m i =
@@ -265,14 +266,14 @@ getMethodInfo clsName m = do
 getField :: String -> String -> WriterT [B.Stmt] SM (B.Label, B.Type, B.Offset)
 getField clsName field = do
     structs <- structures <$> get
-    let (B.Struct _ _ fs _) = lookupStruct structs ("_class_"++clsName)
+    let (B.Struct _ _ _ fs _) = lookupStruct structs ("_class_"++clsName)
     return (lookupField fs field)
   where
     lookupField (fld@(l,_,_):r) f =
         if f == l then fld
         else lookupField r f
     
-lookupStruct (s@(B.Struct l _ _ _):ss) n =
+lookupStruct (s@(B.Struct l _ _ _ _):ss) n =
     if n == l then s
     else lookupStruct ss n
 
@@ -293,6 +294,17 @@ getFunType l = do
         else funType l fs
 
 emitE :: A.Expr A.Position -> WriterT [B.Stmt] SM B.Name
+emitE (A.Lit _ (A.String _ s)) = do
+    strs <- strings <$> get
+    n <- lift $ newName B.Reference    
+    l <- case lookup s strs of
+            Just l -> return l
+            Nothing -> do
+                l <- lift $ newLabel "_S"
+                modify (\env -> env{ strings = (s,l) : strs})
+                return l
+    tell [B.VarDecl B.Reference n (B.NewString l)]
+    return n
 emitE (A.Lit _ l) = do
     n <- lift $ newName (litType l)
     c <- litC l
@@ -300,21 +312,12 @@ emitE (A.Lit _ l) = do
     return n
   where
     litType l = case l of 
-                    A.String _ _ -> B.Reference
                     A.Null _ -> B.Reference
                     A.Int _ _ -> B.IntT
                     A.Byte _ _ -> B.ByteT
                     A.Bool _ _ -> B.ByteT
     litC :: A.Lit A.Position -> WriterT [B.Stmt] SM B.Constant
-    litC l = case l of
-                A.String _ s -> do
-                    strs <- strings <$> get
-                    case lookup s strs of
-                        Just l -> return $ B.StringC l
-                        Nothing -> do
-                            l <- lift $ newLabel "_S"
-                            modify (\env -> env{ strings = (s,l) : strs})
-                            return $ B.StringC l
+    litC l = case l of                    
                 A.Null _ -> return B.Null
                 A.Int _ i -> return $ B.IntC i
                 A.Byte _ i -> return $ B.ByteC i

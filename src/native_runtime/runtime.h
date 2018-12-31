@@ -5,13 +5,13 @@ struct Type {
     struct Type *parent;
     int32_t dataSize;
     void *methods;
-};
+} __attribute__((__packed__ ));
 
 struct Reference {
     struct Type *type;
     void *data;
     int32_t counter;
-};
+} __attribute__((__packed__ ));
 
 struct Array {
     int32_t elementSize;
@@ -32,9 +32,9 @@ void __free(obj r);
 void __incRef(obj r);
 void __decRef(obj r);
 
-obj __newRefArray();
-obj __newIntArray();
-obj __newByteArray();
+obj __newRefArray(int32_t length);
+obj __newIntArray(int32_t length);
+obj __newByteArray(int32_t length);
 obj __newArray(int32_t size, int32_t length);
 
 void *__getelementptr(obj array, int32_t index);

@@ -206,6 +206,8 @@ checkD (FunctionDef pos tret id args b) = do
     checkTypeExists AllowVoid tret
     mapM (lift . typeFromArg) args >>= mapM_ (checkTypeExists NoVoid)
     checkArgsRedeclaration args
+    if length args > 9 then throw ("Function has too many parameters, consider creating an object", pos)
+    else return ()
     checkedBody <- local (funEnv tret args) (checkB b)
     return $ FunctionDef pos tret id args checkedBody
 checkD (ClassDef pos id parent decls) = do
@@ -231,6 +233,8 @@ checkM (MethodDecl pos tret id args b) = do
     checkTypeExists AllowVoid tret
     mapM (lift . typeFromArg) args >>= mapM_ (checkTypeExists NoVoid)
     checkArgsRedeclaration args
+    if length args > 8 then throw ("Method has too many parameters, consider creating an object", pos)
+    else return ()
     checkedBody <- local (funEnv tret args) (checkB b)
     return $ MethodDecl pos tret id args checkedBody
 
@@ -562,20 +566,24 @@ checkE (BinaryOp pos op el er) = do
     (ner, ert) <- checkE er
     let err = throw ("Incompatible operands' types: "++typeName elt++" and "++typeName ert, pos)
     case (op, fmap (\_->()) elt, fmap (\_->()) ert) of
-        (Add _, ClassT _ (Ident _ "String"), ClassT _ (Ident _ "String")) -> return (BinaryOp pos op nel ner, elt)
-        (Add _, StringT _, ClassT _ (Ident _ "String")) -> return (BinaryOp pos op nel ner, elt)
-        (Add _, ClassT _ (Ident _ "String"), StringT _) -> return (BinaryOp pos op nel ner, ert)
-        (Equ _, ClassT _ (Ident _ "String"), StringT _) -> return (BinaryOp pos op nel ner, bool)
-        (Equ _, StringT _, ClassT _ (Ident _ "String")) -> return (BinaryOp pos op nel ner, bool)
-        (Neq _, ClassT _ (Ident _ "String"), StringT _) -> return (BinaryOp pos op nel ner, bool)
-        (Neq _, StringT _, ClassT _ (Ident _ "String")) -> return (BinaryOp pos op nel ner, bool)
+        (Add _, ClassT _ (Ident _ "String"), ClassT _ (Ident _ "String")) -> return (App pos (Member pos nel (name "concat") (Just "String")) [ner], elt)
+        (Add _, StringT _, ClassT _ (Ident _ "String")) -> return (App pos (Member pos nel (name "concat") (Just "String")) [ner], elt)
+        (Add _, ClassT _ (Ident _ "String"), StringT _) -> return (App pos (Member pos nel (name "concat") (Just "String")) [ner], ert)
+        (Add _, StringT _, StringT _) -> return (App pos (Member pos nel (name "concat") (Just "String")) [ner], ert)
+        (Equ _, ClassT _ (Ident _ "String"), StringT _) -> return (App pos (Member pos nel (name "equals") (Just "String")) [ner], bool)
+        (Equ _, StringT _, ClassT _ (Ident _ "String")) -> return (App pos (Member pos nel (name "equals") (Just "String")) [ner], bool)
+        (Equ _, StringT _, StringT _) -> return (App pos (Member pos nel (name "equals") (Just "String")) [ner], bool)
+        (Neq _, ClassT _ (Ident _ "String"), StringT _) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just "String")) [ner]), bool)
+        (Neq _, StringT _, ClassT _ (Ident _ "String")) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just "String")) [ner]), bool)
+        (Neq _, StringT _, StringT _) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just "String")) [ner]), bool)
         (op, a, b) -> 
             if a == b then
                 case a of
-                    ClassT _ _ -> case op of
-                                    Equ _ -> return (BinaryOp pos op nel ner, bool)
-                                    Neq _ -> return (BinaryOp pos op nel ner, bool)
-                                    _ -> err
+                    ClassT _ (Ident _ c) -> 
+                        case op of
+                            Equ _ -> return (App pos (Member pos nel (name "equals") (Just c)) [ner], bool)
+                            Neq _ -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just c)) [ner]), bool)
+                            _ -> err
                     _ -> return (BinaryOp pos op nel ner, opType elt op)
             else if a == IntT () && b == ByteT () then
                 checkE (BinaryOp pos op nel (Cast pos (IntT pos) ner))

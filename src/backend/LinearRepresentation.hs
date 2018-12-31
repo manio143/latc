@@ -10,7 +10,7 @@ import Data.List (intercalate)
 data Program = Program [Structure] [Function] [(Label, String)]
     deriving (Eq, Ord, Show)
 
-data Structure = Struct Label Size [(Label, Type, Offset)] [{-method-}Label]
+data Structure = Struct Label (Maybe Label) Size [(Label, Type, Offset)] [{-method-}Label]
     deriving (Eq, Ord, Show)
 
 data Type = IntT | ByteT | Reference
@@ -37,11 +37,12 @@ data Stmt = VarDecl Type Name Expr
           | JumpPos Label Value
           deriving (Eq, Ord, Show)
 
-data Target = Variable Name | Array Name Name | Member Name Offset
+data Target = Variable Name | Array Name Value | Member Name Offset
     deriving (Eq, Ord, Show)
 
 data Expr = NewObj {-Type-}Label
           | NewArray Type Value
+          | NewString Label
           | Val Value
           | Call Label [Value] --function call
           | MCall Name Index [Value] --method call
@@ -57,7 +58,7 @@ data Expr = NewObj {-Type-}Label
 data Value = Const Constant | Var Name
     deriving (Eq, Ord)
 
-data Op = Add | Sub | Mul | Div | Mod | And | Or | Eq | Ne | Lt | Gt | Le | Ge
+data Op = Add | Sub | Mul | Div | Mod | And | Or
     deriving (Eq, Ord)
 
 data Constant = IntC Integer | ByteC Integer | StringC Label | Null
@@ -65,7 +66,7 @@ data Constant = IntC Integer | ByteC Integer | StringC Label | Null
 
 linShow (Program ss fs strs) = intercalate "\n" (map linShowStruct ss) ++"\n"++ intercalate "\n" (map linShowFun fs) ++ "\n" ++ (concat $ map (\(l,s) -> l++": "++show s++"\n") strs)
 
-linShowStruct (Struct l _ fs ms) = "struct "++l++"\n"++(concat $ map (\(l,t,_)-> "    "++show t++" "++l++";\n") fs)++(concat $ map (\l->"    "++l++"(...)\n") ms)
+linShowStruct (Struct l _ _ fs ms) = "struct "++l++"\n"++(concat $ map (\(l,t,_)-> "    "++show t++" "++l++";\n") fs)++(concat $ map (\l->"    "++l++"(...)\n") ms)
 
 linShowFun (Fun l t args body) = show t++" "++l++"("++intercalate ", " (map (\(t,n)->show t++" "++n) args)++")\n"++(concat $ map (\s->linShowStmt s++"\n") body)
 
@@ -89,7 +90,7 @@ linShowExp (NewArray t v) = "new "++show t++"["++show v++"]"
 linShowExp e = show e
 
 linShowTarget (Variable v) = v
-linShowTarget (Array a v) = a++"["++v++"]"
+linShowTarget (Array a v) = a++"["++show v++"]"
 linShowTarget (Member m o) = m++".field["++show o++"]"
 
 instance Show Type where
@@ -109,9 +110,9 @@ instance Show Op where
     show Mod = "%"
     show And = "&&"
     show Or = "||"
-    show Eq = "=="
-    show Ne = "!="
-    show Lt = "<"
-    show Gt = ">"
-    show Le = "<="
-    show Ge = ">="
+    -- show Eq = "=="
+    -- show Ne = "!="
+    -- show Lt = "<"
+    -- show Gt = ">"
+    -- show Le = "<="
+    -- show Ge = ">="

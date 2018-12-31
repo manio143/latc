@@ -1,4 +1,4 @@
-module ValuePropagation (propagateValues, used, assigned, declared) where
+module ValuePropagation (propagateValues, used, usedE, assigned, declared) where
 
 import Control.Monad.State
 import Debug.Trace
@@ -28,9 +28,13 @@ propS stmts =
                 Assign t e -> do
                     e' <- propE e
                     case t of
-                        Variable n -> remove n
-                        _ -> return ()
-                    return (Assign t e')
+                        Variable n ->do
+                            remove n
+                            return (Assign t e')
+                        Array n v -> do
+                            v' <- updatedVal v
+                            return (Assign (Array n v') e')
+                        _ -> return (Assign t e')
                 ReturnVal e -> do
                     e' <- propE e
                     return (ReturnVal e')
@@ -86,7 +90,7 @@ used (JumpNeg l v) = usedV v
 used (JumpPos l v) = usedV v
 used _ = []
 
-usedT (Array n n2) = [n,n2]
+usedT (Array n v) = n : usedV v
 usedT (Member n _) = [n]
 usedT _ = []
 

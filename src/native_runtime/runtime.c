@@ -30,7 +30,12 @@ obj __new(struct Type *t) {
 
 void __free(obj r) {
     if (r->type == &_class_Array) {
-        void *els = ((struct Array *)r->data)->elements;
+        struct Array *arr = r->data;
+        void **els = arr->elements;
+        if (arr->elementSize == sizeof(void *)) {
+            for (int i = 0; i < arr->length; i++)
+                __decRef(els[i]);
+        }
         if (els != NULL)
             free(els);
     } else if (r->type == &_class_String) {
@@ -43,11 +48,16 @@ void __free(obj r) {
     free(r);
 }
 
-void __incRef(obj r) { r->counter++; }
+void __incRef(obj r) {
+    if (r != NULL)
+        r->counter++;
+}
 void __decRef(obj r) {
-    r->counter--;
-    if (r->counter <= 0)
-        __free(r);
+    if (r != NULL) {
+        r->counter--;
+        if (r->counter <= 0)
+            __free(r);
+    }
 }
 
 obj __newRefArray(int32_t length) { return __newArray(sizeof(obj), length); }
