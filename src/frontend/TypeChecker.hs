@@ -25,6 +25,7 @@ checkTypes prog@(Program pos defs) = do
     funDefs <- getFunctions defs
     let functions = addBuiltInFunctions funDefs
     checkRedeclarationInFunctions functions
+    checkForMain functions
     np <- runReaderT (checkP prog) (classes, functions, [])
     return (np, classes)
 
@@ -182,6 +183,12 @@ addBuiltInFunctions funs = builtIn ++ funs
                 Fun (name "readString") string []
             ]
 
+checkForMain :: [Function] -> InnerMonad ()
+checkForMain [] = throwError ("No entrypoiny (main)", Undefined)
+checkForMain ((Fun (Ident _ "main") (IntT _) []):_) = return ()
+checkForMain ((Fun (Ident p "main") _ _):_) = throwError ("Invalid signature for 'main'\nExpected 'int main()'", p)
+checkForMain (f:fs) = checkForMain fs
+
 void = VoidT BuiltIn
 bool = BoolT BuiltIn
 int = IntT BuiltIn
@@ -296,12 +303,21 @@ checkS (Assignment pos ase e) = do
     checkEisLValue pos nase
     (ne, et) <- checkE e
     checkCastUp pos et aset
-    return (Assignment pos nase ne, id)
+    (cls,_,_) <- ask
+    b <- lift $ equivalentType cls et aset
+    if b then return (Assignment pos nase ne, id)
+    else case aset of
+            IntT _ -> return (Assignment pos nase (Cast pos aset ne), id)
+            ByteT _ -> return (Assignment pos nase (Cast pos aset ne), id)
+            _ -> return (Assignment pos nase ne, id)
 checkS (ReturnValue pos e) = do
     rt <- retrieve "$ret" >>= return . fromJust
     (ne, et) <- checkE e
     checkCastUp pos et rt
-    return (ReturnValue pos ne, id)
+    (cls,_,_) <- ask
+    b <- lift $ equivalentType cls et rt
+    if b then return (ReturnValue pos ne, id)
+    else return (ReturnValue pos (Cast pos rt ne), id)
 checkS (ReturnVoid pos) = do
     rt <- retrieve "$ret" >>= return . fromJust
     case rt of
@@ -584,6 +600,11 @@ checkE (BinaryOp pos op el er) = do
                             Equ _ -> return (App pos (Member pos nel (name "equals") (Just c)) [ner], bool)
                             Neq _ -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just c)) [ner]), bool)
                             _ -> err
+                    ByteT _ -> 
+                        case op of
+                            Div _ -> checkE (BinaryOp pos op (Cast pos (IntT pos) nel) (Cast pos (IntT pos) ner))
+                            Mod _ -> checkE (BinaryOp pos op (Cast pos (IntT pos) nel) (Cast pos (IntT pos) ner))
+                            _ -> return (BinaryOp pos op nel ner, opType elt op)
                     _ -> return (BinaryOp pos op nel ner, opType elt op)
             else if a == IntT () && b == ByteT () then
                 checkE (BinaryOp pos op nel (Cast pos (IntT pos) ner))

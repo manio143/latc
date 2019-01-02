@@ -7,17 +7,23 @@ import ProgramStructure
 type InnerMonad = Except (String, Position) 
 
 checkReturnPaths :: Program Position -> InnerMonad (Program Position)
-checkReturnPaths p@(Program _ defs) = do
-    mapM_ checkD defs
-    return p
+checkReturnPaths (Program a defs) = do
+    ndefs <- mapM checkD defs
+    return (Program a ndefs)
 
-checkD (FunctionDef _ (VoidT _) _ _ b) = return ()
-checkD (FunctionDef _ _ _ _ b) = checkFB b
-checkD (ClassDef _ _ _ decls) = mapM_ checkDecl decls
+checkD (FunctionDef a (VoidT tp) n as b) = do
+    nb <- checkVoidBlock b
+    return (FunctionDef a (VoidT tp) n as nb)
+checkD f@(FunctionDef _ _ _ _ b) = checkFB b >> return f
+checkD (ClassDef a c p decls) = do
+    ndecls <- mapM checkDecl decls
+    return (ClassDef a c p ndecls)
 
-checkDecl (MethodDecl _ (VoidT _) _ _ b) = return ()
-checkDecl (MethodDecl _ _ _ _ b) = checkFB b
-checkDecl _ = return ()
+checkDecl (MethodDecl a (VoidT tp) n as b) = do
+    nb <- checkVoidBlock b
+    return (MethodDecl a (VoidT tp) n as nb)
+checkDecl m@(MethodDecl _ _ _ _ b) = checkFB b >> return m
+checkDecl d = return d
 
 checkFB :: Block Position -> InnerMonad ()
 checkFB b@(Block pos _) = do
@@ -45,3 +51,10 @@ checkS (While _ (Lit _ (Bool _ True)) _) = return True
 checkS (While _ _ s) = checkS s
 checkS (BlockStmt _ b) = checkB b
 checkS _ = return False
+
+checkVoidBlock b@(Block a stmts) =
+    if stmts == [] then return (Block a [ReturnVoid BuiltIn])
+    else 
+        case last stmts of
+            ReturnVoid _ -> return b
+            _ -> return (Block a (stmts ++ [ReturnVoid BuiltIn]))

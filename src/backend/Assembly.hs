@@ -36,6 +36,7 @@ data Instruction = ADD Value Value
                  | RET
                  | SetLabel String
                  | Section String
+                 | Global String
                  | DB Value
                  | DW Value
                  | DD Value
@@ -51,8 +52,8 @@ data Reg = R11 | R11D | R11B
          | RAX | EAX | AL
          | RBP
          | RSP
-         | RSI | ESI 
-         | RDI | EDI
+         | RSI | ESI | SIL
+         | RDI | EDI | DIL
          | RBX | EBX | BL  --callee saved
          | R12 | R12D | R12B --callee saved
          | R13 | R13D | R13B --callee saved
@@ -74,12 +75,23 @@ instance Show Value where
                         else ""
         in "["++show r++m++o++"]"
 
-printX86 (Program is) = concat $ map p is
+printX86 (Program is) = "%include 'runtime.ext'\n" ++ (concat $ map p is)
   where
     p i = pp i ++ "\n"
     pp (SetLabel l) = l++":"
-    pp (Section s) = "."++s
-    pp x = "    "++show x
+    pp (Section s) = "section ."++s
+    pp (Global s) = "global "++s
+    pp x = "    "++ppp x
+    ppp (ADD v1 v2) = "ADD "++show v1++", "++show v2
+    ppp (SUB v1 v2) = "SUB "++show v1++", "++show v2
+    ppp (IMUL v1 v2) = "IMUL "++show v1++", "++show v2
+    ppp (MOV v1 v2) = "MOV "++show v1++", "++show v2
+    ppp (AND v1 v2) = "AND "++show v1++", "++show v2
+    ppp (OR v1 v2) = "OR "++show v1++", "++show v2
+    ppp (XOR v1 v2) = "XOR "++show v1++", "++show v2
+    ppp (CMP v1 v2) = "CMP "++show v1++", "++show v2
+    ppp (TEST v1 v2) = "TEST "++show v1++", "++show v2
+    ppp i = show i
 
 isReg (Register _) = True
 isReg _ = False
@@ -101,8 +113,10 @@ topReg EDX = RDX
 topReg RDX = RDX
 topReg EDI = RDI
 topReg RDI = RDI
+topReg DIL = RDI
 topReg ESI = RSI
 topReg RSI = RSI
+topReg SIL = RSI
 topReg R8B = R8
 topReg R8D = R8
 topReg R8  = R8
@@ -127,6 +141,7 @@ topReg R14  = R14
 topReg R15B = R15
 topReg R15D = R15
 topReg R15  = R15
+topReg RSP  = RSP
 
 regSize Reference x = x
 regSize IntT RAX = EAX
@@ -147,8 +162,8 @@ regSize ByteT RAX = AL
 regSize ByteT RBX = BL
 regSize ByteT RCX = CL
 regSize ByteT RDX = DL
-regSize ByteT RSI = ESI
-regSize ByteT RDI = EDI
+regSize ByteT RSI = SIL
+regSize ByteT RDI = DIL
 regSize ByteT R8 = R8B
 regSize ByteT R9 = R9B
 regSize ByteT R10 = R10B
@@ -158,3 +173,36 @@ regSize ByteT R13 = R13B
 regSize ByteT R14 = R14B
 regSize ByteT R15 = R15B
 regSize t r = regSize t (topReg r)
+
+regSizeV t (Register r) = Register (regSize t r)
+regSizeV _ v = v
+
+regSizeR EAX = IntT
+regSizeR EBX = IntT
+regSizeR ECX = IntT
+regSizeR EDX = IntT
+regSizeR ESI = IntT
+regSizeR EDI = IntT
+regSizeR R8D = IntT
+regSizeR R9D = IntT
+regSizeR R10D = IntT
+regSizeR R11D = IntT
+regSizeR R12D = IntT
+regSizeR R13D = IntT
+regSizeR R14D = IntT
+regSizeR R15D = IntT
+regSizeR AL = ByteT
+regSizeR BL = ByteT
+regSizeR CL = ByteT
+regSizeR DL = ByteT
+regSizeR SIL = ByteT
+regSizeR DIL = ByteT
+regSizeR R8B = ByteT
+regSizeR R9B = ByteT
+regSizeR R10B = ByteT
+regSizeR R11B = ByteT
+regSizeR R12B = ByteT
+regSizeR R13B = ByteT
+regSizeR R14B = ByteT
+regSizeR R15B = ByteT
+regSizeR x = Reference

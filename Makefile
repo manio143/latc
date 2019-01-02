@@ -3,6 +3,8 @@ all: src/native_runtime/runtime.o
 
 src/native_runtime/runtime.o: src/native_runtime/runtime.h src/native_runtime/runtime.c
 	gcc -g -c src/native_runtime/runtime.c -o src/native_runtime/runtime.o
+	cp src/native_runtime/runtime.o runtime
+	cp src/native_runtime/asm_externs runtime.ext
 
 src/native_runtime/test : src/native_runtime/runtime.o src/native_runtime/runtime_test.c
 	gcc -g -c src/native_runtime/runtime_test.c -o src/native_runtime/runtime_test.o
