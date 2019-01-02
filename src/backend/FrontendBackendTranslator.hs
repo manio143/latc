@@ -3,6 +3,7 @@ module FrontendBackendTranslator (translate) where
 -- Remove builtInFunctions from list when emitting x86
 
 import Data.List ((\\), findIndex)
+import Data.Maybe (fromJust)
 import Control.Monad.State
 import Control.Monad.Writer
 
@@ -198,18 +199,22 @@ emitS (A.Assignment _ el er) = do
     case el of
         A.Var _ (A.Ident _ x) -> do
             x' <- nameOf x
-            tell [B.Assign (B.Variable x') (B.Val (B.Var en))]
+            t <- typeOf x'
+            tell [B.Assign t (B.Variable x') (B.Val (B.Var en))]
         A.ArrAccess _ earr eidx _ -> do
             enarr <- emitE earr
             enidx <- emitE eidx
-            tell [B.Assign (B.Array enarr (B.Var enidx)) (B.Val (B.Var en))]
+            t <- typeOf en
+            tell [B.Assign t (B.Array enarr (B.Var enidx)) (B.Val (B.Var en))]
         A.Member _ em (A.Ident _ field) (Just className) -> do
             enm <- emitE em
             off <- getOffset className field
-            tell [B.Assign (B.Member enm off) (B.Val (B.Var en))]
+            t <- getType className field
+            tell [B.Assign t (B.Member enm off) (B.Val (B.Var en))]
 emitS (A.ReturnValue _ e) = do
     en <- emitE e
-    tell [B.ReturnVal (B.Val (B.Var en))]
+    t <- typeOf en
+    tell [B.ReturnVal t (B.Val (B.Var en))]
 emitS (A.ReturnVoid _) = tell [B.Return]
 emitS (A.ExprStmt _ e) = emitE e >> return ()
 emitS (A.BlockStmt _ b) = emitB b
@@ -241,17 +246,14 @@ emitS (A.While _ ec s) = do
 nameOf :: String -> WriterT [B.Stmt] SM String
 nameOf x = do
     vm <- varMap <$> get
-    return (lookupName vm x)
-  where
-    lookupName ((y, n):r) x | x == y = n
-                            | otherwise = lookupName r x
+    return (lookupVal vm x)
+
 typeOf :: String -> WriterT [B.Stmt] SM B.Type
 typeOf x = do
     vt <- varType <$> get
-    return (lookupType vt x)
-  where
-    lookupType ((y, t):r) x | x == y = t
-                            | otherwise = lookupType r x
+    return (lookupVal vt x)
+
+lookupVal l n = fromJust $ lookup n l
 
 getMethodInfo :: String -> String -> WriterT [B.Stmt] SM (B.Label, B.Index)
 getMethodInfo clsName m = do
@@ -425,7 +427,7 @@ emitE (A.BinaryOp _ op el er) =
                     B.VarDecl B.ByteT nb (B.Val (B.Const (B.ByteC val))),
                     B.VarDecl ent nt (B.BinOp B.Sub (B.Var enl) (B.Var enr)),
                     cond,
-                    B.Assign (B.Variable nb) (B.Val (B.Const (B.ByteC (if val == 1 then 0 else 1)))),
+                    B.Assign B.ByteT (B.Variable nb) (B.Val (B.Const (B.ByteC (if val == 1 then 0 else 1)))),
                     B.SetLabel l
                   ]
             return nb

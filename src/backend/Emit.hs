@@ -125,8 +125,8 @@ addRefCounters ss args = evalState run 0
                 else do
                     d <- decr n
                     walk ss refs (ds ++ d : i : s : acc)
-            Assign t e -> do
-                case t of
+            Assign t tg e -> do
+                case tg of
                     Variable v -> 
                         if elem v refs then do
                             d <- decr v
@@ -188,16 +188,16 @@ allocateRegisters ss args regMap =
                 if elem n tout then
                     alloc (usedE e) ss n
                 else return ()
-            Assign t e -> do
+            Assign t tg e -> do
                 assertInRegs (used s) ss
-                case t of
+                case tg of
                     Variable x -> do
                         umap <- getMap
                         if not $ inReg umap x then
                             alloc (used s) ss x
                         else return ()
                     _ -> return ()
-            ReturnVal e ->
+            ReturnVal t e ->
                 assertInRegs (usedE e) ss
             JumpZero _ (Var n) ->
                 assertInRegs [n] ss
@@ -398,27 +398,27 @@ emitI stmts stackSize argsMap = do
         let reg = case lookup n armap of
                     Nothing -> X.Register (X.regSize t X.RBX)
                     _ -> fromJust (getReg armap n)
-        emitExpr e reg bef aft
-    emitStmt ((Assign t e), bef@(brmap,bfr), aft@(armap,afr)) = do
+        emitExpr (Just t) e reg bef aft
+    emitStmt ((Assign t tg e), bef@(brmap,bfr), aft@(armap,afr)) = do
         spillAndLoad brmap armap
-        case t of
+        case tg of
             Variable n -> do
                 let reg = fromJust (getReg armap n)
-                emitExpr e reg bef aft
+                emitExpr (Just t) e reg bef aft
             Array a idx -> do
                 doneCall <- prepareCall afr
                 setupCallArgs armap brmap afr [Var a,idx]
                 call (X.Label "__getelementptr")
                 tell [moverr X.R13 X.RAX]
                 doneCall
-                emitExpr e (X.Memory X.R13 Nothing Nothing) bef aft
+                emitExpr (Just t) e (X.Memory X.R13 Nothing Nothing) bef aft
             Member m off -> do
                 let (X.Register reg) = getReg armap m <|> getReg brmap m
                 tell [X.MOV (X.Register X.R13) (X.Memory reg Nothing (Just 0x08))]
-                emitExpr e (X.Memory X.R13 Nothing (Just off)) bef aft
-    emitStmt ((ReturnVal e), bef@(brmap, _), aft@(armap,_)) = do
+                emitExpr (Just t) e (X.Memory X.R13 Nothing (Just off)) bef aft
+    emitStmt ((ReturnVal t e), bef@(brmap, _), aft@(armap,_)) = do
         spillAndLoad brmap armap
-        emitExpr e (X.Register X.RAX) bef aft
+        emitExpr (Just t) e (X.Register (X.regSize t X.RAX)) bef aft
         exit
     emitStmt (Return, bef, aft) = do
         exit
@@ -433,7 +433,7 @@ emitI stmts stackSize argsMap = do
             Const (ByteC 0) -> tell [X.JMP (X.Label l)]
             Var n -> do
                 let rbx = X.Register X.RBX
-                emitExpr (Val (Var n)) rbx bef aft
+                emitExpr Nothing (Val (Var n)) rbx bef aft
                 tell [X.TEST rbx rbx, X.JZ (X.Label l)]
             _ -> return ()
     emitStmt ((JumpNotZero l v), bef@(brmap,_), aft@(armap,_)) = do
@@ -443,7 +443,7 @@ emitI stmts stackSize argsMap = do
             Const (ByteC x) -> if x /= 0 then tell [X.JMP (X.Label l)] else return ()
             Var n -> do
                 let rbx = X.Register X.RBX
-                emitExpr (Val (Var n)) rbx bef aft
+                emitExpr Nothing (Val (Var n)) rbx bef aft
                 tell [X.TEST rbx rbx, X.JNZ (X.Label l)]
     emitStmt ((JumpNeg l v), bef@(brmap,_), aft@(armap,_)) = do
         spillAndLoad brmap armap
@@ -452,7 +452,7 @@ emitI stmts stackSize argsMap = do
             Const (ByteC x) -> if x < 0 then tell [X.JMP (X.Label l)] else return ()
             Var n -> do
                 let rbx = X.Register X.RBX
-                emitExpr (Val (Var n)) rbx bef aft
+                emitExpr Nothing (Val (Var n)) rbx bef aft
                 tell [X.CMP rbx (X.Constant 0), X.JL (X.Label l)]
     emitStmt ((JumpPos l v), bef@(brmap,_), aft@(armap,_)) = do
         spillAndLoad brmap armap
@@ -461,7 +461,7 @@ emitI stmts stackSize argsMap = do
             Const (ByteC x) -> if x > 0 then tell [X.JMP (X.Label l)] else return ()
             Var n -> do
                 let rbx = X.Register X.RBX
-                emitExpr (Val (Var n)) rbx bef aft
+                emitExpr Nothing (Val (Var n)) rbx bef aft
                 tell [X.CMP rbx (X.Constant 0), X.JG (X.Label l)]
     prepareCall free = do
         let callerSaved = [X.R11, X.R10, X.R9, X.R8, X.RDX, X.RCX, X.RAX, X.RSI, X.RDI]
@@ -476,7 +476,7 @@ emitI stmts stackSize argsMap = do
         tell (alignstack ++ map X.PUSH usedAsVal)
         return (tell (map X.POP (reverse usedAsVal) ++ dealignstack))
     --emitExpr e t b a | trace ("EMIT EXP "++show e) False = undefined
-    emitExpr (Val v) target bef@(brmap,bfr) aft@(armap, afr) = do
+    emitExpr t (Val v) target bef@(brmap,bfr) aft@(armap, afr) = do
         case v of
             Var n -> 
                 case getmVal brmap n <|> getmVal armap n of
@@ -489,9 +489,10 @@ emitI stmts stackSize argsMap = do
                     from@(X.Memory _ _ _) ->
                         case target of
                             X.Register q -> tell [X.MOV target from]
-                            _ -> tell [
-                                    X.MOV (X.Register X.RBX) from,
-                                    X.MOV target (X.Register X.RBX)
+                            _ -> let rbx = X.regSize (fromMaybe Reference t) X.RBX in
+                                 tell [
+                                    X.MOV (X.Register rbx) from,
+                                    X.MOV target (X.Register rbx)
                                         ]
             Const c ->
                 case c of
@@ -502,12 +503,12 @@ emitI stmts stackSize argsMap = do
                             X.Register _ ->
                                 tell [X.XOR target target]
                             _ -> tell [X.MOV target (X.Constant 0)]
-    emitExpr (Call l vs) target bef@(brmap,bfr) aft@(armap,afr) =
-        emitCall (X.Label l) vs target bef aft
-    emitExpr (Cast l v) target bef aft =
-        emitCall (X.Label "__cast") [v, Const (StringC l)] target bef aft
-    emitExpr (MCall n idx vs) target bef aft@(armap, afr) = do
-        emitExpr (Val (Var n)) (X.Register X.RBX) bef aft
+    emitExpr t (Call l vs) target bef@(brmap,bfr) aft@(armap,afr) =
+        emitCall t (X.Label l) vs target bef aft
+    emitExpr t (Cast l v) target bef aft =
+        emitCall t (X.Label "__cast") [v, Const (StringC l)] target bef aft
+    emitExpr t (MCall n idx vs) target bef aft@(armap, afr) = do
+        emitExpr Nothing (Val (Var n)) (X.Register X.RBX) bef aft
         tell [
             X.MOV (X.Register X.R12) (X.Memory X.RBX Nothing Nothing),
             --get pointer to type
@@ -516,30 +517,34 @@ emitI stmts stackSize argsMap = do
             X.MOV (X.Register X.R12) (X.Memory X.R12 Nothing (Just (idx*0x08)))
             --get method pointer
               ]
-        emitCall (X.Register X.R12) vs target bef aft
-    emitExpr (NewObj l) target bef aft = do
-        emitCall (X.Label "__new") [Const (StringC l)] target bef aft
-    emitExpr (NewArray t v) target bef aft = do
+        emitCall t (X.Register X.R12) vs target bef aft
+    emitExpr t (NewObj l) target bef aft = do
+        emitCall t (X.Label "__new") [Const (StringC l)] target bef aft
+    emitExpr tp (NewArray t v) target bef aft = do
         case t of
-            IntT -> emitCall (X.Label "__newIntArray") [v] target bef aft
-            ByteT -> emitCall (X.Label "__newByteArray") [v] target bef aft
-            Reference -> emitCall (X.Label "__newRefArray") [v] target bef aft
-    emitExpr (ArrAccess n v) target bef aft@(armap, afr) = do
-        emitCall (X.Label "__getelementptr") [Var n, v] (X.Register X.R12) bef aft
-        tell [X.MOV target (X.Memory X.R12 Nothing Nothing)]
-    emitExpr (MemberAccess n off) target bef aft@(armap,afr) = do
+            IntT -> emitCall tp (X.Label "__newIntArray") [v] target bef aft
+            ByteT -> emitCall tp (X.Label "__newByteArray") [v] target bef aft
+            Reference -> emitCall tp (X.Label "__newRefArray") [v] target bef aft
+    emitExpr t (ArrAccess n v) target bef aft@(armap, afr) = do
+        emitCall t (X.Label "__getelementptr") [Var n, v] (X.Register X.R12) bef aft
+        case target of
+            X.Register r -> tell [X.MOV target (X.Memory X.R12 Nothing Nothing)]
+            _ -> let rbx = X.regSize (fromJust t) X.RBX in
+                 tell [X.MOV (X.Register rbx) (X.Memory X.R12 Nothing Nothing),
+                       X.MOV target (X.Register rbx)]
+    emitExpr t (MemberAccess n off) target bef aft@(armap,afr) = do
         let (X.Register reg) = fromJust (getReg armap n)
         tell [
             X.MOV (X.Register X.R13) (X.Memory reg Nothing (Just 0x08)),
             --get pointer to data
             X.MOV target (X.Memory X.R13 Nothing (Just off))
               ]
-    emitExpr (IntToByte v) target bef aft =
-        emitExpr (Val v) target bef aft
-    emitExpr (ByteToInt v) target bef aft = do
+    emitExpr t (IntToByte v) target bef aft =
+        emitExpr t (Val v) target bef aft
+    emitExpr t (ByteToInt v) target bef aft = do
         tell [X.XOR target target]
-        emitExpr (Val v) target bef aft
-    emitExpr (Not v) target' bef@(brmap,bfr) aft@(armap,afr) =
+        emitExpr t (Val v) target bef aft
+    emitExpr t (Not v) target' bef@(brmap,bfr) aft@(armap,afr) =
         let target = X.regSizeV ByteT target' in
         case v of
             Var n -> do
@@ -567,10 +572,10 @@ emitI stmts stackSize argsMap = do
                 case x of
                     0 -> tell [X.MOV target (X.Constant 1)]
                     1 -> tell [X.MOV target (X.Constant 0)]
-    emitExpr (BinOp op v1 v2) target bef@(brmap,bfr) aft@(armap,afr) = do
+    emitExpr t (BinOp op v1 v2) target bef@(brmap,bfr) aft@(armap,afr) = do
         let vl = valueConv armap v1 <|> valueConv brmap v1
             vr = valueConv armap v2 <|> valueConv brmap v2
-            size = opSize op vl vr
+            size = fromMaybe (opSize op) t
         case op of
             Div -> do
                 done <- divide vl vr afr
@@ -589,8 +594,8 @@ emitI stmts stackSize argsMap = do
                     (opcode op) x vr,
                     X.MOV target x
                       ]
-    emitExpr (NewString l) target bef aft = 
-        emitCall (X.Label "__createString") [Const (StringC l)] target bef aft
+    emitExpr t (NewString l) target bef aft = 
+        emitCall t (X.Label "__createString") [Const (StringC l)] target bef aft
 
     divide vl vr afr = do
         done <- prepareDiv afr
@@ -608,15 +613,11 @@ emitI stmts stackSize argsMap = do
     opcode And = X.AND
     opcode Or = X.OR
 
-    opSize And _ _ = ByteT
-    opSize Or _ _ = ByteT
-    opSize _ vl vr = case vl of
-                        X.Register r -> X.regSizeR r
-                        _ -> case vr of
-                                X.Register r -> X.regSizeR r
-                                _ -> IntT
+    opSize And = ByteT
+    opSize Or = ByteT
+    opSize _ = IntT
 
-    emitCall fun vs target bef@(brmap,bfr) aft@(armap,afr) = do
+    emitCall t fun vs target bef@(brmap,bfr) aft@(armap,afr) = do
         doneCall <- prepareCall afr
         setupCallArgs armap brmap afr vs
         call fun
@@ -624,6 +625,7 @@ emitI stmts stackSize argsMap = do
         doneCall
         case target of
             X.Register r -> tell [moverr r X.RBX]
+            _ -> tell [X.MOV target (X.Register $ X.regSize (fromJust t) X.RBX)]
 
     spillAndLoad brmap armap = do
         let keys = map fst brmap

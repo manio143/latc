@@ -28,19 +28,19 @@ subS stmts = evalState (walk stmts []) []
                             else do
                                 add (e,n)
                                 return s
-                Assign t e -> do
+                Assign t tg e -> do
                     m <- find e
                     case m of
                         Nothing -> 
-                            case t of
+                            case tg of
                                 Variable n -> do
                                     add (e,n)
                                     return s
                                 _ -> return s
                         Just g -> do
                             b <- checkValid (e,g) seen
-                            if b then return (Assign t (Val (Var g)))
-                            else case t of
+                            if b then return (Assign t tg (Val (Var g)))
+                            else case tg of
                                     Variable n -> do
                                         add (e,n)
                                         return s
@@ -69,7 +69,7 @@ subS stmts = evalState (walk stmts []) []
             isWlabel g seen
     isWlabel g (s:ss) = case s of
                             SetLabel ('W':_) -> return False
-                            Assign (Variable h) _ ->
+                            Assign t (Variable h) _ ->
                                 if h == g then return True
                                 else isWlabel g ss
                             VarDecl _ h _ ->

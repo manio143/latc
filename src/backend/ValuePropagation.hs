@@ -25,19 +25,19 @@ propS stmts =
                         Val v -> add (n,v)
                         _ -> return ()
                     return (VarDecl t n e')
-                Assign t e -> do
+                Assign t tg e -> do
                     e' <- propE e
-                    case t of
+                    case tg of
                         Variable n ->do
                             remove n
-                            return (Assign t e')
+                            return (Assign t tg e')
                         Array n v -> do
                             v' <- updatedVal v
-                            return (Assign (Array n v') e')
-                        _ -> return (Assign t e')
-                ReturnVal e -> do
+                            return (Assign t (Array n v') e')
+                        _ -> return (Assign t tg e')
+                ReturnVal t e -> do
                     e' <- propE e
-                    return (ReturnVal e')
+                    return (ReturnVal t e')
                 JumpZero l v -> do
                     v' <- updatedVal v
                     return (JumpZero l v')
@@ -74,7 +74,7 @@ propS stmts =
         in filter (isUsed u) stmts
         where
             isUsed u (VarDecl _ n _) = elem n u
-            isUsed u (Assign (Variable n) _) = elem n u
+            isUsed u (Assign _ (Variable n) _) = elem n u
             isUsed _ _ = True
 
 used' (VarDecl t n e@(Call _ _)) = n : usedE e
@@ -82,8 +82,8 @@ used' (VarDecl t n e@(MCall _ _ _)) = n : usedE e
 used' e = used e
 
 used (VarDecl t n e) = usedE e
-used (Assign t e) = usedT t ++ usedE e
-used (ReturnVal e) = usedE e
+used (Assign t tg e) = usedT tg ++ usedE e
+used (ReturnVal t e) = usedE e
 used (JumpZero l v) = usedV v
 used (JumpNotZero l v) = usedV v
 used (JumpNeg l v) = usedV v
@@ -111,7 +111,7 @@ usedE (Cast _ v) = usedV v
 usedE _ = []
 
 assigned (VarDecl _ n _) = [n]
-assigned (Assign (Variable n) _) = [n]
+assigned (Assign t (Variable n) _) = [n]
 assigned _ = []
 
 declared (VarDecl _ n _) = [n]

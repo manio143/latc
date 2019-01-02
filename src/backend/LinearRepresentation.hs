@@ -26,8 +26,8 @@ type Index = Integer
 type Offset = Integer
 
 data Stmt = VarDecl Type Name Expr
-          | Assign Target Expr
-          | ReturnVal Expr
+          | Assign Type Target Expr
+          | ReturnVal Type Expr
           | Return
           | SetLabel Label
           | Jump Label
@@ -71,8 +71,8 @@ linShowStruct (Struct l _ _ fs ms) = "struct "++l++"\n"++(concat $ map (\(l,t,_)
 linShowFun (Fun l t args body) = show t++" "++l++"("++intercalate ", " (map (\(t,n)->show t++" "++n) args)++")\n"++(concat $ map (\s->linShowStmt s++"\n") body)
 
 linShowStmt (VarDecl t n e) = "    "++show t ++ " "++n++" = "++linShowExp e
-linShowStmt (Assign g e) = "    "++linShowTarget g ++" = "++linShowExp e
-linShowStmt (ReturnVal e) = "    return "++linShowExp e
+linShowStmt (Assign t g e) = "    "++linShowTarget g ++" = "++linShowExp e
+linShowStmt (ReturnVal t e) = "    return "++linShowExp e
 linShowStmt (Return) = "    return"
 linShowStmt (SetLabel l) = "  "++l++":"
 linShowStmt (Jump l) = "    jump "++l
