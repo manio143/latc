@@ -100,6 +100,8 @@ obj __cast(obj o, struct Type *t) {
     return NULL;
 }
 
+uint8_t emptyString[] = "";
+
 obj __createString(char *c) {
     obj r = __new(&_class_String);
     struct String *str = malloc(sizeof(struct String));
@@ -114,7 +116,7 @@ obj __createString(char *c) {
         u8_strncpy(str->data, c, str->length);
         str->data[str->length] = 0;
     } else
-        str->data = NULL;
+        str->data = emptyString;
     str->length = 0;
     uint8_t *walker = str->data;
     while (walker != NULL) {
@@ -247,6 +249,8 @@ int32_t _String_indexOf(obj str, obj substr, int32_t startFrom) {
         errMsg = "ERROR: IndexOf starting index is too big.";
         error();
     }
+    if (_String_length(str) < _String_length(substr))
+        return -1;
     uint8_t *rs = ((struct String *)str->data)->data;
     uint8_t *rsub = ((struct String *)substr->data)->data;
     uint8_t *start = rs;

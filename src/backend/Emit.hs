@@ -208,8 +208,8 @@ allocateRegisters ss args regMap =
             JumpPos _ (Var n) ->
                 assertInRegs [n] ss
             _ -> return ()
-        reclaim dead ss
         (fr,umap,_) <- get
+        reclaim dead ss
         allocS ss ((s, umap, fr):acc) {-trace (linShowStmt s ++"   "++ show umap)-}
     allocS [] acc = return $ reverse acc
     reclaim ds ss = mapM_ (reclaimOne ss) ds
@@ -432,7 +432,8 @@ emitI stmts stackSize argsMap = do
             Const (IntC 0) -> tell [X.JMP (X.Label l)]
             Const (ByteC 0) -> tell [X.JMP (X.Label l)]
             Var n -> do
-                let rbx = X.Register X.RBX
+                let (X.Register r) = getReg brmap n <|> getReg armap n
+                let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
                 emitExpr Nothing (Val (Var n)) rbx bef aft
                 tell [X.TEST rbx rbx, X.JZ (X.Label l)]
             _ -> return ()
@@ -442,7 +443,8 @@ emitI stmts stackSize argsMap = do
             Const (IntC x) -> if x /= 0 then tell [X.JMP (X.Label l)] else return ()
             Const (ByteC x) -> if x /= 0 then tell [X.JMP (X.Label l)] else return ()
             Var n -> do
-                let rbx = X.Register X.RBX
+                let (X.Register r) = getReg brmap n <|> getReg armap n
+                let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
                 emitExpr Nothing (Val (Var n)) rbx bef aft
                 tell [X.TEST rbx rbx, X.JNZ (X.Label l)]
     emitStmt ((JumpNeg l v), bef@(brmap,_), aft@(armap,_)) = do
@@ -451,7 +453,8 @@ emitI stmts stackSize argsMap = do
             Const (IntC x) -> if x < 0 then tell [X.JMP (X.Label l)] else return ()
             Const (ByteC x) -> if x < 0 then tell [X.JMP (X.Label l)] else return ()
             Var n -> do
-                let rbx = X.Register X.RBX
+                let (X.Register r) = getReg brmap n <|> getReg armap n
+                let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
                 emitExpr Nothing (Val (Var n)) rbx bef aft
                 tell [X.CMP rbx (X.Constant 0), X.JL (X.Label l)]
     emitStmt ((JumpPos l v), bef@(brmap,_), aft@(armap,_)) = do
@@ -460,7 +463,8 @@ emitI stmts stackSize argsMap = do
             Const (IntC x) -> if x > 0 then tell [X.JMP (X.Label l)] else return ()
             Const (ByteC x) -> if x > 0 then tell [X.JMP (X.Label l)] else return ()
             Var n -> do
-                let rbx = X.Register X.RBX
+                let (X.Register r) = getReg brmap n <|> getReg armap n
+                let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
                 emitExpr Nothing (Val (Var n)) rbx bef aft
                 tell [X.CMP rbx (X.Constant 0), X.JG (X.Label l)]
     prepareCall free = do
@@ -555,18 +559,16 @@ emitI stmts stackSize argsMap = do
                             tell [X.MOV (X.Register X.BL) src]
                             return X.BL
                 case target of
-                    X.Register q ->
-                        if r == q then
-                            tell [X.NOT (X.Register r)]
-                        else
-                            tell [
-                                moverr q r,
-                                X.NOT (X.Register q)
-                                  ]
+                    X.Register q -> do
+                        if r /= q then
+                            tell [moverr q r]
+                        else return ()
+                        tell [
+                            X.TEST (X.Register q) (X.Register q),
+                            X.SETZ (X.Register q)]
                     _ -> tell [
-                            X.NOT (X.Register r),
-                            X.MOV target (X.Register r),
-                            X.NOT (X.Register r)
+                            X.TEST (X.Register r) (X.Register r),
+                            X.SETZ target
                                ]
             Const (ByteC x) ->
                 case x of

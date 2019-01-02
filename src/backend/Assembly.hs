@@ -21,7 +21,7 @@ data Instruction = ADD Value Value
                  | AND Value Value
                  | OR Value Value
                  | XOR Value Value
-                 | NOT Value
+                 | SETZ Value
                  | JMP Value
                  | JZ Value
                  | JNZ Value
