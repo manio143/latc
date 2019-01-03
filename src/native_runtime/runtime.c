@@ -357,12 +357,16 @@ int8_t error() {
 
 int32_t readInt() {
     int32_t i;
-    scanf("%d", &i);
+    scanf("%d\n", &i);
     return i;
 }
 obj readString() {
-    char *line;
-    size_t size;
+    char *line = NULL;
+    size_t size = 0;
     getline(&line, &size, stdin);
-    return __createString(line);
+    size = u8_strlen(line);
+    line[size - 1] = 0; // remove newline
+    obj l = __createString(line);
+    free(line);
+    return l;
 }

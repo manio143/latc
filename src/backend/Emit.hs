@@ -40,23 +40,22 @@ emitString (l,s) = tell [X.SetLabel l, X.DB (X.Label (show s)), X.DB (X.Constant
 
 emitF :: Function -> Writer [X.Instruction] ()
 emitF (Fun l _ args body) = do
-    tell [X.Global l, X.SetLabel l]
+    trace l tell [X.Global l, X.SetLabel l]
     emitB args body
 
 emitB args body = do
     let liveness = analize body
         withRefCounters = liveness {-addRefCounters liveness args-}
         regMap = mapArgs args
-        (alreg, stack, fr) = allocateRegisters withRefCounters args regMap
-    (trace_ liveness regMap alreg) emitI alreg stack (regMap,fr) 
+        (alreg, stack) = allocateRegisters withRefCounters args regMap
+    (trace_ liveness alreg) emitI alreg stack
 
 tracel ll = trace (concat $ map (\(s,li,lo) -> linShowStmt s ++"    "++show li++"   "++show lo++"\n") ll)
 
-trace_ ll rr aa = 
+trace_ ll aa = 
     let lll = concat $ map (\(s,li,lo) -> linShowStmt s ++"    "++show li++"   "++show lo++"\n") ll
-        rrr = "           "++show rr++"\n"
-        aaa = concat $ map (\(s,rmap,free) -> linShowStmt s ++"    "++show rmap++"\n") aa
-    in trace (lll++"\n"++rrr++"\n"++aaa)
+        aaa = concat $ map (\(s,(b,_),(p,_),_) -> show b++"\n"++linShowStmt s ++"    "++show p++"\n") aa
+    in trace (lll++"\n"++aaa)
 
 mapArgs as = map (\((_,n),v)->(n,[v])) zas
   where
@@ -78,16 +77,6 @@ analize stmts =
         inout = map (\(s,i,n) -> (s,i,n,[],[])) succ
     in map (\(s,_,_,tin,tout)->(s,tin,tout)) $ work inout
   where
-    findSucc :: [(Stmt, Integer)] -> (Stmt, Integer) -> (Stmt, Integer, [Integer])
-    findSucc ind (s,i) = 
-        case s of
-            Jump l -> (s,i,[findIndex ind (SetLabel l)])
-            JumpZero l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
-            JumpNotZero l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
-            JumpNeg l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
-            JumpPos l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
-            _ -> (s,i,[i+1])
-    findIndex ind s = snd $ head $ filter (\(s',i)->s==s') ind
     work :: [(Stmt, Integer,[Integer],[Name],[Name])] -> [(Stmt, Integer,[Integer],[Name],[Name])]
     work inout =
         let ninout = map (proc inout) inout in
@@ -97,6 +86,20 @@ analize stmts =
         let succ = concat $ map (\nn -> filter (\(_,ii,_,_,_) -> nn == ii) inout) n
             succin = map (\(_,_,_,sin,_)->sin) succ
         in (s,i,n,nub $ used s ++ (tout \\ assigned s),nub $ concat succin)
+
+findSucc :: [(Stmt, Integer)] -> (Stmt, Integer) -> (Stmt, Integer, [Integer])
+findSucc ind (s,i) = 
+    case s of
+        Jump l -> (s,i,[findIndex ind (SetLabel l)])
+        JumpZero l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
+        JumpNotZero l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
+        JumpNeg l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
+        JumpPos l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
+        ReturnVal _ _ -> (s,i,[])
+        Return -> (s,i,[])
+        _ -> (s,i,[i+1])
+    where
+        findIndex ind s = snd $ head $ filter (\(s',i)->s==s') ind
 
 addRefCounters :: [(Stmt, [Name],[Name])] -> [(Type,Name)] -> [(Stmt, [Name],[Name])]
 addRefCounters ss args = evalState run 0
@@ -169,59 +172,106 @@ addRefCounters ss args = evalState run 0
 
 type SM2 = State ([X.Reg], [(Name, [X.Value])], Integer)
 
-allocateRegisters :: [(Stmt, [Name],[Name])] -> [(Type,Name)] -> [(Name, [X.Value])] -> ([(Stmt, [(Name,[X.Value])],[X.Reg])],Integer,[X.Reg])
+type ValMap = [(Name,[X.Value])]
+type FreeRegs = [X.Reg]
+type Moment = (ValMap, FreeRegs)
+type StmtAlloc = (Stmt, Moment, Moment, Moment)
+
+allocateRegisters :: [(Stmt, [Name],[Name])] -> [(Type,Name)] -> [(Name, [X.Value])] -> ([StmtAlloc],Integer)
 allocateRegisters ss args regMap = 
-    let st@(fr,_,_) = freeWithoutArgs regMap
+    let st = freeWithoutArgs regMap
         (stmts,(_,_,stack)) = runState run st
-    in (stmts,stack - 8,fr)
+    in (stmts,stack - 8)
   where
     freeRegs = [X.R11, X.R10, X.R9, X.R8, X.RDX, X.RCX, X.RAX, X.RSI, X.RDI {-, X.RBX, X.R12, X.R13, X.R14, X.R15 -}]
     freeWithoutArgs umap =
         let freeRegs' = filter (not . isUsedR umap) freeRegs
         in (freeRegs', umap, 8)
-    run = allocS ss []
-    allocS ((s,tin,tout):ss) acc = do
+    run = allocS withSucc []
+    withSucc = 
+        let zipped = zip ss [1..]
+            ind = map (\((s,_,_),i)->(s,i)) zipped
+        in map (\((s,ti,to),i) -> (i,s,ti,to,thrd $ findSucc ind (s,i))) zipped
+        where thrd (_,_,x) = x
+    allocS :: [(Integer, Stmt, [Name], [Name], [Integer])] -> [(Integer, Stmt, Moment, Moment, Moment)] -> SM2 [StmtAlloc]
+    allocS ((i,s,tin,tout,succ):ss) acc = do
+        before <- getst
         let dead = filter (\i -> not $ elem i tout) tin
         case s of
             VarDecl t n e -> do
-                assertInRegs (usedE e) ss
+                assertInRegs (usedE e)
                 if elem n tout then
-                    alloc (usedE e) ss n
+                    alloc (usedE e) n
                 else return ()
             Assign t tg e -> do
-                assertInRegs (used s) ss
+                assertInRegs (used s)
                 case tg of
                     Variable x -> do
                         umap <- getMap
                         if not $ inReg umap x then
-                            alloc (used s) ss x
+                            alloc (used s) x
                         else return ()
                     _ -> return ()
             ReturnVal t e ->
-                assertInRegs (usedE e) ss
+                assertInRegs (usedE e)
             JumpZero _ (Var n) ->
-                assertInRegs [n] ss
+                assertInRegs [n]
             JumpNotZero _ (Var n) ->
-                assertInRegs [n] ss
+                assertInRegs [n]
             JumpNeg _ (Var n) ->
-                assertInRegs [n] ss
+                assertInRegs [n]
             JumpPos _ (Var n) ->
-                assertInRegs [n] ss
+                assertInRegs [n]
             _ -> return ()
-        (fr,umap,_) <- get
-        reclaim dead ss
-        allocS ss ((s, umap, fr):acc) {-trace (linShowStmt s ++"   "++ show umap)-}
-    allocS [] acc = return $ reverse acc
-    reclaim ds ss = mapM_ (reclaimOne ss) ds
-    reclaimOne ss n = do
+        prep <- getst
+        reclaim dead
+        case s of
+            Jump l -> do
+                let lidx = head succ
+                if lidx > i then
+                    mapM_ alloca tout
+                else do
+                    let (_,_,b,_,_) = head $ filter (\(i,_,_,_,_)->i == lidx) acc
+                    conformTo b
+            JumpZero l _ -> do
+                let lidx = head $ tail succ
+                if lidx > i then
+                    mapM_ alloca tout
+                else do
+                    let (_,_,b,_,_) = head $ filter (\(i,_,_,_,_)->i == lidx) acc
+                    conformTo b
+            JumpNotZero l _ -> do
+                let lidx = head $ tail succ
+                if lidx > i then
+                    mapM_ alloca tout
+                else do
+                    let (_,_,b,_,_) = head $ filter (\(i,_,_,_,_)->i == lidx) acc
+                    conformTo b
+            JumpNeg l _ -> do
+                let lidx = head $ tail succ
+                if lidx > i then
+                    mapM_ alloca tout
+                else do
+                    let (_,_,b,_,_) = head $ filter (\(i,_,_,_,_)->i == lidx) acc
+                    conformTo b
+            JumpPos l _ -> do
+                let lidx = head $ tail succ
+                if lidx > i then
+                    mapM_ alloca tout
+                else do
+                    let (_,_,b,_,_) = head $ filter (\(i,_,_,_,_)->i == lidx) acc
+                    conformTo b
+            _ -> return ()
+        after <- getst
+        allocS ss ((i,s, before,prep,after):acc) {-trace (linShowStmt s ++"   "++ show umap)-}
+    allocS [] acc = return $ reverse $ map (\(_,s,b,p,a) -> (s,b,p,a)) acc
+    reclaim ds = mapM_ reclaimOne ds
+    reclaimOne n = do
         umap <- getMap
         let freed = case lookup n umap of
                             Just mapping ->
                                 map (\(X.Register r) -> X.topReg r) $ filter X.isReg mapping
                             Nothing -> error ("var "++n++"is not live")
-        if aliveLater n ss then
-            alloca n
-        else return ()
         case freed of
             [] -> error $ "Something is no yes " ++n++show umap
             _ -> modify (\(free, umap, stack) -> (sort $ freed ++ free, remove n umap, stack))
@@ -235,19 +285,19 @@ allocateRegisters ss args regMap =
         case free of
             [] -> return Nothing
             (h:t) -> return $ Just h
-    assertInRegs vars ss = do
+    assertInRegs vars = do
         umap <- getMap
         let inregs = filter (inReg umap) vars
             needregs = vars \\ inregs
-        mapM_ (alloc vars ss) needregs
-    alloc needed ss n = do
+        mapM_ (alloc vars) needregs
+    alloc needed n = do
         let t = findType n
         mr <- freeReg
         case mr of
             Just r -> do
                 assignReg n t r
             Nothing -> do
-                r <- spillOtherThan needed ss
+                r <- spillOtherThan needed
                 assignReg n t r
     findType n = 
         let d = filter (\(s,_,_) -> declared s == [n]) ss in
@@ -262,19 +312,19 @@ allocateRegisters ss args regMap =
     inReg umap v = case lookup v umap of
                         Just mapping -> filter X.isReg mapping /= []
                         Nothing -> False
-    spillOtherThan needed ss = do
+    spillOtherThan needed = do
         umap <- getMap
         let notneeded = filter (\(n,mp)-> (not $ elem n needed) && any X.isReg mp) umap
         {-TODO: better strategy? -}
             ms = firstAlreadyInMemory notneeded
         case ms of
             Just s -> do
-                reclaim [s] ss
+                reclaim [s]
                 freeReg >>= return . fromJust
             Nothing -> do
                 let chosen = head $ map fst notneeded
                 alloca chosen
-                reclaim [chosen] ss
+                reclaim [chosen]
                 freeReg >>= return . fromJust
     firstAlreadyInMemory ((s,vs):ss) =
         if filter X.isMem vs /= [] then Just s
@@ -288,13 +338,28 @@ allocateRegisters ss args regMap =
         else do
             stack <- (\(_,_,t)->t) <$> get
             let t = findType n
-            modify (\(free, umap, stack) -> (free,insert (n, X.Memory X.RBP Nothing (Just (-stack))) umap, stack + (st t)))
+            modify (\(free, umap, stack) -> (free,insert (n, X.Memory X.RBP Nothing (Just (-stack - (st t)))) umap, stack + (st t)))
     isUsedR m r = isUsed m (X.Register r)
     containsMem ((m,s):ms) n | m == n = any X.isMem s
     containsMem (_:ms) n = containsMem ms n
     containsMem [] _ = False
-    aliveLater n ((s,tin,tout):ss) = elem n tin || aliveLater n ss
-    aliveLater _ [] = False
+    getst = do
+        (fr,mp,_) <- get
+        return (mp,fr)
+    conformTo (umap,_) = do
+        m <- getMap
+        mapM_ mapper m
+        where 
+            mapper (n,s) = case lookup n umap of
+                            Just mapping -> 
+                                case filter X.isReg mapping of
+                                    (X.Register h:_) -> do
+                                        reclaim [n]
+                                        let t = findType n
+                                        assignReg n t h
+                                    _ -> return ()
+                            Nothing -> return ()
+    
 
 isUsed :: [(Name, [X.Value])] -> X.Value -> Bool
 isUsed ((_,s):ss) r@(X.Register rr) = elem r (map regToTop s) || isUsed ss r
@@ -304,10 +369,10 @@ isUsed ((_,s):ss) r@(X.Register rr) = elem r (map regToTop s) || isUsed ss r
 isUsed ((_,s):ss) r = elem r s || isUsed ss r
 isUsed [] _ = False 
 
-emitI :: [(Stmt, [(Name,[X.Value])], [X.Reg])] -> Integer -> ([(Name, [X.Value])],[X.Reg]) -> Writer [X.Instruction] ()
-emitI stmts stackSize argsMap = do
+emitI :: [StmtAlloc] -> Integer -> Writer [X.Instruction] ()
+emitI stmts stackSize = do
     entry stackSize
-    body (inoutPairs argsMap stmts)
+    body stmts
   where
     entry s = do tell [
                     X.PUSH (X.Register X.RBP),
@@ -322,10 +387,6 @@ emitI stmts stackSize argsMap = do
             ceil16 x = case x `mod` 16 of
                         0 -> x
                         _ -> x + (16 - (x `mod` 16))
-    inoutPairs (aumap,afr) ss =
-        let (stmts, umaps, frs) = unzip3 ss
-            bunch = zip (aumap:umaps) (afr:frs)
-        in zip3 stmts bunch (drop 1 bunch)
     body ss = mapM_ emitStmt ss
 
     exit = tell [
@@ -344,8 +405,8 @@ emitI stmts stackSize argsMap = do
     moverr dest src = 
         let srcSize = X.regSizeR src
         in X.MOV (X.Register (X.regSize srcSize (X.topReg dest))) (X.Register src)
-    setupCallArgs umap bmap fr args = do
-        let sourceArgs = map (\a -> valueConv umap a <|> valueConv bmap a) args
+    setupCallArgs prep@(umap, fr) args = do
+        let sourceArgs = map (\a -> valueConv umap a ) args
             (regArgs,stackArgs) = splitAt 6 sourceArgs
             destinationRegs = [X.RDI, X.RSI, X.RDX, X.RCX, X.R8, X.R9]
             fromToRegArgs = zip regArgs (map X.Register destinationRegs)
@@ -376,11 +437,11 @@ emitI stmts stackSize argsMap = do
             replace what with = map (\(a,b) -> if a == what then (with,b) else (a,b))
             replace2 what with = map (\a -> if a == what then with else a)
     call f = tell [ X.CALL f, moverr X.RSP X.RBX ]
-    valueConv umap (Var a) = getmVal umap a
-    valueConv umap (Const (IntC i)) = Just $ X.Constant i
-    valueConv umap (Const (ByteC i)) = Just $ X.Constant i
-    valueConv umap (Const Null) = Just $ X.Constant 0
-    valueConv umap (Const (StringC s)) = Just $ X.Label s
+    valueConv umap (Var a) = fromJust $ getmVal umap a
+    valueConv umap (Const (IntC i)) = X.Constant i
+    valueConv umap (Const (ByteC i)) = X.Constant i
+    valueConv umap (Const Null) = X.Constant 0
+    valueConv umap (Const (StringC s)) = X.Label s
     getmVal umap n =
         case lookup n umap of
             Nothing -> Nothing
@@ -393,79 +454,95 @@ emitI stmts stackSize argsMap = do
                         _ -> Nothing
 
     --emitStmt (s,b,a) | trace ("EMIT STM "++show s) False = undefined
-    emitStmt ((VarDecl t n e), bef@(brmap,bfr), aft@(armap,afr)) = do
-        spillAndLoad brmap armap
-        let reg = case lookup n armap of
+    emitStmt ((VarDecl t n e), before, prep@(umap,_), after) = do
+        spillAndLoad before prep
+        let reg = case lookup n umap of
                     Nothing -> X.Register (X.regSize t X.RBX)
-                    _ -> fromJust (getReg armap n)
-        emitExpr (Just t) e reg bef aft
-    emitStmt ((Assign t tg e), bef@(brmap,bfr), aft@(armap,afr)) = do
-        spillAndLoad brmap armap
+                    _ -> fromJust (getReg umap n)
+        emitExpr (Just t) e reg prep
+        spillAndLoad prep after
+    emitStmt ((Assign t tg e), before, prep@(umap,fr), after) = do
+        spillAndLoad before prep
         case tg of
             Variable n -> do
-                let reg = fromJust (getReg armap n)
-                emitExpr (Just t) e reg bef aft
+                let reg = fromJust (getReg umap n)
+                emitExpr (Just t) e reg prep
             Array a idx -> do
-                doneCall <- prepareCall afr
-                setupCallArgs armap brmap afr [Var a,idx]
+                doneCall <- prepareCall fr
+                setupCallArgs prep [Var a,idx]
                 call (X.Label "__getelementptr")
                 tell [moverr X.R13 X.RAX]
                 doneCall
-                emitExpr (Just t) e (X.Memory X.R13 Nothing Nothing) bef aft
+                emitExpr (Just t) e (X.Memory X.R13 Nothing Nothing) prep
             Member m off -> do
-                let (X.Register reg) = getReg armap m <|> getReg brmap m
+                let (X.Register reg) = fromJust $ getReg umap m
                 tell [X.MOV (X.Register X.R13) (X.Memory reg Nothing (Just 0x08))]
-                emitExpr (Just t) e (X.Memory X.R13 Nothing (Just off)) bef aft
-    emitStmt ((ReturnVal t e), bef@(brmap, _), aft@(armap,_)) = do
-        spillAndLoad brmap armap
-        emitExpr (Just t) e (X.Register (X.regSize t X.RAX)) bef aft
+                emitExpr (Just t) e (X.Memory X.R13 Nothing (Just off)) prep
+        spillAndLoad prep after
+    emitStmt ((ReturnVal t e), before, prep@(umap,_), after) = do
+        spillAndLoad before prep
+        emitExpr (Just t) e (X.Register (X.regSize t X.RAX)) prep
         exit
-    emitStmt (Return, bef, aft) = do
+    emitStmt (Return, bef, prep, aft) = do
         exit
-    emitStmt ((SetLabel l), _, _) = do
+    emitStmt ((SetLabel l), before, prep, after) = do
+        if take 2 l /= "_C" then storeToMem prep
+        else return ()        
         tell [X.SetLabel l]
-    emitStmt ((Jump l), _, _) = do
+        if take 2 l /= "_C" then loadFromMem prep
+        else return ()
+    emitStmt ((Jump l), before, prep, after) = do
+        spillAndLoad before prep
+        storeToMem after
         tell [X.JMP (X.Label l)]
-    emitStmt ((JumpZero l v), bef@(brmap,_), aft@(armap,_)) = do
-        spillAndLoad brmap armap
+    emitStmt ((JumpZero l v), before, prep@(umap,_), after) = do
+        spillAndLoad before prep
         case v of
             Const (IntC 0) -> tell [X.JMP (X.Label l)]
             Const (ByteC 0) -> tell [X.JMP (X.Label l)]
             Var n -> do
-                let (X.Register r) = getReg brmap n <|> getReg armap n
+                let (X.Register r) = fromJust $ getReg umap n
                 let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
-                emitExpr Nothing (Val (Var n)) rbx bef aft
+                emitExpr Nothing (Val (Var n)) rbx prep
+                spillAndLoad prep after
+                storeToMem after
                 tell [X.TEST rbx rbx, X.JZ (X.Label l)]
             _ -> return ()
-    emitStmt ((JumpNotZero l v), bef@(brmap,_), aft@(armap,_)) = do
-        spillAndLoad brmap armap
+    emitStmt ((JumpNotZero l v), before, prep@(umap,_), after) = do
+        spillAndLoad before prep
         case v of
             Const (IntC x) -> if x /= 0 then tell [X.JMP (X.Label l)] else return ()
             Const (ByteC x) -> if x /= 0 then tell [X.JMP (X.Label l)] else return ()
             Var n -> do
-                let (X.Register r) = getReg brmap n <|> getReg armap n
+                let (X.Register r) = fromJust $ getReg umap n
                 let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
-                emitExpr Nothing (Val (Var n)) rbx bef aft
+                emitExpr Nothing (Val (Var n)) rbx prep
+                spillAndLoad prep after
+                storeToMem after
                 tell [X.TEST rbx rbx, X.JNZ (X.Label l)]
-    emitStmt ((JumpNeg l v), bef@(brmap,_), aft@(armap,_)) = do
-        spillAndLoad brmap armap
+    emitStmt ((JumpNeg l v), before, prep@(umap,_), after) = do
+        spillAndLoad before prep
         case v of
             Const (IntC x) -> if x < 0 then tell [X.JMP (X.Label l)] else return ()
             Const (ByteC x) -> if x < 0 then tell [X.JMP (X.Label l)] else return ()
             Var n -> do
-                let (X.Register r) = getReg brmap n <|> getReg armap n
+                let (X.Register r) = fromJust $ getReg umap n
                 let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
-                emitExpr Nothing (Val (Var n)) rbx bef aft
+                emitExpr Nothing (Val (Var n)) rbx prep
+                spillAndLoad prep after
+                --storeToMem after
                 tell [X.CMP rbx (X.Constant 0), X.JL (X.Label l)]
-    emitStmt ((JumpPos l v), bef@(brmap,_), aft@(armap,_)) = do
-        spillAndLoad brmap armap
+    emitStmt ((JumpPos l v), before, prep@(umap,_), after) = do
+        spillAndLoad before prep
         case v of
             Const (IntC x) -> if x > 0 then tell [X.JMP (X.Label l)] else return ()
             Const (ByteC x) -> if x > 0 then tell [X.JMP (X.Label l)] else return ()
             Var n -> do
-                let (X.Register r) = getReg brmap n <|> getReg armap n
+                let (X.Register r) = fromJust $ getReg umap n
                 let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
-                emitExpr Nothing (Val (Var n)) rbx bef aft
+                emitExpr Nothing (Val (Var n)) rbx prep
+                spillAndLoad prep after
+                --storeToMem after
                 tell [X.CMP rbx (X.Constant 0), X.JG (X.Label l)]
     prepareCall free = do
         let callerSaved = [X.R11, X.R10, X.R9, X.R8, X.RDX, X.RCX, X.RAX, X.RSI, X.RDI]
@@ -480,24 +557,24 @@ emitI stmts stackSize argsMap = do
         tell (alignstack ++ map X.PUSH usedAsVal)
         return (tell (map X.POP (reverse usedAsVal) ++ dealignstack))
     --emitExpr e t b a | trace ("EMIT EXP "++show e) False = undefined
-    emitExpr t (Val v) target bef@(brmap,bfr) aft@(armap, afr) = do
+    emitExpr t (Val v) target prep@(umap,_) = do
         case v of
             Var n -> 
-                case getmVal brmap n <|> getmVal armap n of
+                case fromJust $ getmVal umap n of
                     X.Register r ->
                         case target of
                             X.Register q ->
                                 if X.topReg r == X.topReg q then return ()
                                 else tell [moverr q r]
                             _ -> tell [X.MOV target (X.Register r)]
-                    from@(X.Memory _ _ _) ->
-                        case target of
-                            X.Register q -> tell [X.MOV target from]
-                            _ -> let rbx = X.regSize (fromMaybe Reference t) X.RBX in
-                                 tell [
-                                    X.MOV (X.Register rbx) from,
-                                    X.MOV target (X.Register rbx)
-                                        ]
+                    -- from@(X.Memory _ _ _) ->
+                    --     case target of
+                    --         X.Register q -> tell [X.MOV target from]
+                    --         _ -> let rbx = X.regSize (fromMaybe Reference t) X.RBX in
+                    --              tell [
+                    --                 X.MOV (X.Register rbx) from,
+                    --                 X.MOV target (X.Register rbx)
+                    --                     ]
             Const c ->
                 case c of
                     IntC i -> tell [X.MOV (X.regSizeV IntT target) (X.Constant i)]
@@ -507,12 +584,12 @@ emitI stmts stackSize argsMap = do
                             X.Register _ ->
                                 tell [X.XOR target target]
                             _ -> tell [X.MOV target (X.Constant 0)]
-    emitExpr t (Call l vs) target bef@(brmap,bfr) aft@(armap,afr) =
-        emitCall t (X.Label l) vs target bef aft
-    emitExpr t (Cast l v) target bef aft =
-        emitCall t (X.Label "__cast") [v, Const (StringC l)] target bef aft
-    emitExpr t (MCall n idx vs) target bef aft@(armap, afr) = do
-        emitExpr Nothing (Val (Var n)) (X.Register X.RBX) bef aft
+    emitExpr t (Call l vs) target prep@(umap,fr) =
+        emitCall t (X.Label l) vs target prep
+    emitExpr t (Cast l v) target prep =
+        emitCall t (X.Label "__cast") [v, Const (StringC l)] target prep
+    emitExpr t (MCall n idx vs) target prep@(umap, afr) = do
+        emitExpr Nothing (Val (Var n)) (X.Register X.RBX) prep
         tell [
             X.MOV (X.Register X.R12) (X.Memory X.RBX Nothing Nothing),
             --get pointer to type
@@ -521,38 +598,38 @@ emitI stmts stackSize argsMap = do
             X.MOV (X.Register X.R12) (X.Memory X.R12 Nothing (Just (idx*0x08)))
             --get method pointer
               ]
-        emitCall t (X.Register X.R12) vs target bef aft
-    emitExpr t (NewObj l) target bef aft = do
-        emitCall t (X.Label "__new") [Const (StringC l)] target bef aft
-    emitExpr tp (NewArray t v) target bef aft = do
+        emitCall t (X.Register X.R12) vs target prep
+    emitExpr t (NewObj l) target prep = do
+        emitCall t (X.Label "__new") [Const (StringC l)] target prep
+    emitExpr tp (NewArray t v) target prep = do
         case t of
-            IntT -> emitCall tp (X.Label "__newIntArray") [v] target bef aft
-            ByteT -> emitCall tp (X.Label "__newByteArray") [v] target bef aft
-            Reference -> emitCall tp (X.Label "__newRefArray") [v] target bef aft
-    emitExpr t (ArrAccess n v) target bef aft@(armap, afr) = do
-        emitCall t (X.Label "__getelementptr") [Var n, v] (X.Register X.R12) bef aft
+            IntT -> emitCall tp (X.Label "__newIntArray") [v] target prep
+            ByteT -> emitCall tp (X.Label "__newByteArray") [v] target prep
+            Reference -> emitCall tp (X.Label "__newRefArray") [v] target prep
+    emitExpr t (ArrAccess n v) target prep = do
+        emitCall t (X.Label "__getelementptr") [Var n, v] (X.Register X.R12) prep
         case target of
             X.Register r -> tell [X.MOV target (X.Memory X.R12 Nothing Nothing)]
             _ -> let rbx = X.regSize (fromJust t) X.RBX in
                  tell [X.MOV (X.Register rbx) (X.Memory X.R12 Nothing Nothing),
                        X.MOV target (X.Register rbx)]
-    emitExpr t (MemberAccess n off) target bef aft@(armap,afr) = do
-        let (X.Register reg) = fromJust (getReg armap n)
+    emitExpr t (MemberAccess n off) target prep@(umap,_) = do
+        let (X.Register reg) = fromJust (getReg umap n)
         tell [
             X.MOV (X.Register X.R13) (X.Memory reg Nothing (Just 0x08)),
             --get pointer to data
             X.MOV target (X.Memory X.R13 Nothing (Just off))
               ]
-    emitExpr t (IntToByte v) target bef aft =
-        emitExpr t (Val v) target bef aft
-    emitExpr t (ByteToInt v) target bef aft = do
+    emitExpr t (IntToByte v) target prep =
+        emitExpr t (Val v) target prep
+    emitExpr t (ByteToInt v) target prep = do
         tell [X.XOR target target]
-        emitExpr t (Val v) target bef aft
-    emitExpr t (Not v) target' bef@(brmap,bfr) aft@(armap,afr) =
+        emitExpr t (Val v) target prep
+    emitExpr t (Not v) target' prep@(umap,_) =
         let target = X.regSizeV ByteT target' in
         case v of
             Var n -> do
-                let src = getmVal armap n <|> getmVal brmap n
+                let src = fromJust $ getmVal umap n
                 r <- case src of
                         X.Register r -> return r
                         _ -> do
@@ -574,18 +651,18 @@ emitI stmts stackSize argsMap = do
                 case x of
                     0 -> tell [X.MOV target (X.Constant 1)]
                     1 -> tell [X.MOV target (X.Constant 0)]
-    emitExpr t (BinOp op v1 v2) target bef@(brmap,bfr) aft@(armap,afr) = do
-        let vl = valueConv armap v1 <|> valueConv brmap v1
-            vr = valueConv armap v2 <|> valueConv brmap v2
+    emitExpr t (BinOp op v1 v2) target prep@(umap,fr) = do
+        let vl = valueConv umap v1
+            vr = valueConv umap v2
             size = fromMaybe (opSize op) t
         case op of
             Div -> do
-                done <- divide vl vr afr
+                done <- divide vl vr fr
                 tell [moverr X.EBX X.EAX]
                 done
                 tell [X.MOV target (X.Register X.EBX)]
             Mod -> do
-                done <- divide vl vr afr
+                done <- divide vl vr fr
                 tell [moverr X.EBX X.EDX]
                 done
                 tell [X.MOV target (X.Register X.EBX)]
@@ -596,8 +673,8 @@ emitI stmts stackSize argsMap = do
                     (opcode op) x vr,
                     X.MOV target x
                       ]
-    emitExpr t (NewString l) target bef aft = 
-        emitCall t (X.Label "__createString") [Const (StringC l)] target bef aft
+    emitExpr t (NewString l) target prep = 
+        emitCall t (X.Label "__createString") [Const (StringC l)] target prep
 
     divide vl vr afr = do
         done <- prepareDiv afr
@@ -619,9 +696,9 @@ emitI stmts stackSize argsMap = do
     opSize Or = ByteT
     opSize _ = IntT
 
-    emitCall t fun vs target bef@(brmap,bfr) aft@(armap,afr) = do
-        doneCall <- prepareCall afr
-        setupCallArgs armap brmap afr vs
+    emitCall t fun vs target prep@(umap,fr) = do
+        doneCall <- prepareCall fr
+        setupCallArgs prep vs
         call fun
         tell [moverr X.RBX X.RAX]
         doneCall
@@ -629,22 +706,43 @@ emitI stmts stackSize argsMap = do
             X.Register r -> tell [moverr r X.RBX]
             _ -> tell [X.MOV target (X.Register $ X.regSize (fromJust t) X.RBX)]
 
-    spillAndLoad brmap armap = do
+    spillAndLoad (brmap,_) (umap,_) = do
         let keys = map fst brmap
-            changes = map (\k -> (getmVal brmap k, getmVal armap k)) keys
+            changes = map (\k -> (getmVal brmap k, getmVal umap k)) keys
             changesWithoutDeadVars = filter (isJust . snd) changes
             properChanges = map (\(Just x, Just y) -> (x,y)) changesWithoutDeadVars
             schanges = sort properChanges
         sal schanges
         where
-            sal ((X.Register x, X.Register y):chgs) =
-                if x == y then sal chgs
-                else error ("Variable was moved? "++show x ++" "++show y)
             sal ((from,to):chgs) | from == to = sal chgs
             sal ((from, to):chgs) = do
                 tell [X.MOV to from]
                 sal chgs
             sal [] = return ()
+    loadFromMem (umap,_) = do
+        let changes = map (\(_,s) -> pair s) umap
+            properChanges = map fromJust $ filter isJust changes
+        load properChanges
+        where
+            pair s = case filter X.isMem s of
+                        [] -> Nothing
+                        (h:_) -> case filter X.isReg s of
+                                        [] -> Nothing
+                                        (h2:_) -> Just (h,h2)
+            load = mapM_ loadOne
+            loadOne (m,r) = tell [X.MOV r m]
+    storeToMem (umap,_) = do
+        let changes = map (\(_,s) -> pair s) umap
+            properChanges = map fromJust $ filter isJust changes
+        load properChanges
+        where
+            pair s = case filter X.isMem s of
+                        [] -> Nothing
+                        (h:_) -> case filter X.isReg s of
+                                        [] -> Nothing
+                                        (h2:_) -> Just (h,h2)
+            load = mapM_ loadOne
+            loadOne (m,r) = tell [X.MOV m r] --here is the diference
 
 infixl 1 <|>
 (<|>) :: Maybe a -> Maybe a -> a
