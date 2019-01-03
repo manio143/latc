@@ -96,7 +96,7 @@ optimizeLIR print l = prop 1 l
                 sub (i+1) l'
         sub i l = do
             let l' = subCommonExps l
-            if l == l' then return l
+            if l == l' then prop i l
             else do
                 dumpPass print 'L' i (L.linShow l)
                 prop (i+1) l'

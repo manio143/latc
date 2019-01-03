@@ -324,4 +324,9 @@ checkNegative _ _ = return ()
 checkForNullComparison :: Expr Position -> OuterMonad (Expr Position)
 checkForNullComparison (App p (Member pp el (Ident _ eq) mt) [l@(Lit ppp (Null pppp))]) | eq == "equals" =
     return (BinaryOp p (Equ pp) el l)
-checkForNullComparison e = return e
+checkForNullComparison e = checkStringConcat e
+
+checkStringConcat :: Expr Position -> OuterMonad (Expr Position)
+checkStringConcat (App p (Member pp (Lit _ (String _ s)) (Ident _ c) mt) [Lit _ (String _ s2)]) | c == "concat" =
+    return (Lit pp (String pp (s ++ s2)))
+checkStringConcat e = return e
