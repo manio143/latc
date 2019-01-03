@@ -22,6 +22,8 @@ propS stmts =
         walk (VarDecl t n' e : ss) seen
     walk (VarDecl t n e : Assign t' (Variable n') (Val (Var m)) : ss) seen | m == n && neverUsed n ss =
         walk (Assign t (Variable n') e : ss) seen
+    walk (VarDecl t n (Val _) : Assign t' (Variable n') e : ss) seen | n == n' =
+        walk (VarDecl t n e : ss) seen
     walk (s:ss) seen = do
         s' <- case s of
                 VarDecl t n e -> do

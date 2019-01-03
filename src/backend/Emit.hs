@@ -139,7 +139,7 @@ addRefCounters ss args = evalState run 0
                     walk ss (n:refs) (ds ++ ii ++ s : acc)
                 else do
                     d <- decr n
-                    walk ss refs (ds ++ d : ii ++ s : acc)
+                    walk ss (n:refs) (ds ++ d : ii ++ s : acc)
             Assign Reference tg e -> do
                 case tg of
                     Variable v -> do
