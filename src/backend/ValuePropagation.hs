@@ -18,9 +18,9 @@ propS stmts =
     else propS stmts'
   where
     --walk (s:ss) _ | trace (linShowStmt s) False = undefined
-    walk (VarDecl t n e : VarDecl t' n' (Val (Var m)) : ss) seen | m == n =
+    walk (VarDecl t n e : VarDecl t' n' (Val (Var m)) : ss) seen | m == n && neverUsed n ss =
         walk (VarDecl t n' e : ss) seen
-    walk (VarDecl t n e : Assign t' (Variable n') (Val (Var m)) : ss) seen | m == n =
+    walk (VarDecl t n e : Assign t' (Variable n') (Val (Var m)) : ss) seen | m == n && neverUsed n ss =
         walk (Assign t (Variable n') e : ss) seen
     walk (s:ss) seen = do
         s' <- case s of
@@ -81,6 +81,7 @@ propS stmts =
             isUsed u (VarDecl _ n _) = elem n u
             isUsed u (Assign _ (Variable n) _) = elem n u
             isUsed _ _ = True
+    neverUsed n ss = not $ elem n $ concat $ map used ss
 
 used' (VarDecl t n e@(Call _ _)) = n : usedE e
 used' (VarDecl t n e@(MCall _ _ _)) = n : usedE e
