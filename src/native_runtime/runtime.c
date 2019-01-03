@@ -16,8 +16,11 @@ typedef obj (*toStringPtr)(obj);
 
 char *errMsg;
 
+int _new_counter = 0;
+int _free_counter = 0;
+
 obj __new(struct Type *t) {
-    printf("__new\n");
+    _new_counter++;
     obj r = malloc(sizeof(struct Reference));
     r->type = t;
     r->counter = 0;
@@ -31,7 +34,7 @@ obj __new(struct Type *t) {
 }
 
 void __free(obj r) {
-    printf("__free\n");
+    _free_counter++;
     if (r->type == &_class_Array) {
         struct Array *arr = r->data;
         void **els = arr->elements;

@@ -83,7 +83,7 @@ process args = do
             writeFile asmName (X.printX86 x2)
 
             let objName = fileName ++ ".o"
-            callProcess "nasm" [asmName, "-o", objName, "-f elf64"]
+            callProcess "nasm" ["-g", "-F dwarf", asmName, "-o", objName, "-f elf64"]
             callProcess "gcc" [objName, "runtime", "-o", fileName, "-lunistring"]
 
 optimizeLIR print l = prop 1 l

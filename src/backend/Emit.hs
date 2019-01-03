@@ -56,7 +56,7 @@ emitB args body = do
         withRefCounters = addRefCounters liveness args
         regMap = mapArgs args
         (alreg, stack) = allocateRegisters withRefCounters args regMap
-    tracel withRefCounters emitI alreg stack {-(trace_ liveness alreg)-}
+    tracel liveness tracel withRefCounters emitI alreg stack {-(trace_ liveness alreg)-}
 
 tracel ll = trace (concat $ map (\(s,li,lo) -> linShowStmt s ++"    "++show li++"   "++show lo++"\n") ll)
 
@@ -129,18 +129,26 @@ addRefCounters ss args = evalState run 0
         let dead = filter (\i -> not $ elem i tout) tin
         ds <- kill dead refs
         case s of
-            VarDecl Reference n _ -> do
+            VarDecl Reference n e -> do
                 i <- incr n
+                let ii = case e of
+                            Call _ _ -> []
+                            MCall _ _ _ -> []
+                            _ -> [i]
                 if elem n tout then
-                    walk ss (n:refs) (ds ++ i : s : acc)
+                    walk ss (n:refs) (ds ++ ii ++ s : acc)
                 else do
                     d <- decr n
-                    walk ss refs (ds ++ d : i : s : acc)
+                    walk ss refs (ds ++ d : ii ++ s : acc)
             Assign Reference tg e -> do
                 case tg of
                     Variable v -> do
                         i <- incr v
-                        walk ss refs (ds ++ i : s : acc)
+                        let ii = case e of
+                                    Call _ _ -> []
+                                    MCall _ _ _ -> []
+                                    _ -> [i]
+                        walk ss refs (ds ++ ii ++ s : acc)
                     Array n v -> do
                         x <- newVar
                         let aX = VarDecl Reference x (ArrAccess n v)
@@ -148,7 +156,11 @@ addRefCounters ss args = evalState run 0
                         let bX = Assign Reference (Variable x) e
                         ix <- incr x
                         let fin = Assign Reference tg (Val (Var x))
-                        walk ss refs (ds ++ fin : ix : bX : dx : aX : acc)
+                        let iix = case e of
+                                    Call _ _ -> []
+                                    MCall _ _ _ -> []
+                                    _ -> [ix]
+                        walk ss refs (ds ++ fin : iix ++ bX : dx : aX : acc)
                     Member n o -> do
                         x <- newVar
                         let aX = VarDecl Reference x (MemberAccess n o)
@@ -156,24 +168,32 @@ addRefCounters ss args = evalState run 0
                         let bX = Assign Reference (Variable x) e
                         ix <- incr x
                         let fin = Assign Reference tg (Val (Var x))
-                        walk ss refs (ds ++ fin : ix : bX : dx : aX : acc)
+                        let iix = case e of
+                                    Call _ _ -> []
+                                    MCall _ _ _ -> []
+                                    _ -> [ix]
+                        walk ss refs (ds ++ fin : iix ++ bX : dx : aX : acc)
             ReturnVal Reference e -> do
                 x <- newVar
                 let aX = VarDecl Reference x e
                 i <- incr x
                 let ret = ReturnVal Reference (Val (Var x))
-                walk ss refs (ret : ds ++ i : aX : acc)
+                let ii = case e of
+                            Call _ _ -> []
+                            MCall _ _ _ -> []
+                            _ -> [i]
+                walk ss refs (ret : ds ++ ii ++ aX : acc)
             ReturnVal _ _ -> walk ss refs (s : ds ++ acc)
             Return -> walk ss refs (s : ds ++ acc)
             Jump _ -> walk ss refs (s : ds ++ acc)
-            JumpZero _ _ -> killIfNoJump ss tin refs s ds acc
-            JumpNotZero _ _ -> killIfNoJump ss tin refs s ds acc
-            JumpNeg _ _ -> killIfNoJump ss tin refs s ds acc
-            JumpPos _ _ -> killIfNoJump ss tin refs s ds acc
+            JumpZero _ _ -> killIfNoJump ss tin refs s ds acc dead
+            JumpNotZero _ _ -> killIfNoJump ss tin refs s ds acc dead
+            JumpNeg _ _ -> killIfNoJump ss tin refs s ds acc dead
+            JumpPos _ _ -> killIfNoJump ss tin refs s ds acc dead
             _ -> walk ss refs (ds ++ s :  acc)
     walk [] _ acc = return $ analize (reverse acc)
-    killIfNoJump ss tin refs s ds acc = do
-        let deadIfNotJumped = filter (\i -> not $ elem i (let (_,ti,_) = head ss in ti)) tin
+    killIfNoJump ss tin refs s ds acc dead = do
+        let deadIfNotJumped = filter (\i -> not $ elem i (let (_,ti,_) = head ss in ti)) tin \\ dead
         dds <- kill deadIfNotJumped refs
         walk ss refs (dds ++ s : ds ++ acc)
     newVar :: State Int String
