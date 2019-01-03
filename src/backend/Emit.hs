@@ -54,7 +54,7 @@ tracel ll = trace (concat $ map (\(s,li,lo) -> linShowStmt s ++"    "++show li++
 
 trace_ ll aa = 
     let lll = concat $ map (\(s,li,lo) -> linShowStmt s ++"    "++show li++"   "++show lo++"\n") ll
-        aaa = concat $ map (\(s,(b,_),(p,_),_) -> show b++"\n"++linShowStmt s ++"    "++show p++"\n") aa
+        aaa = concat $ map (\(s,b,(p,_),_) -> show b++"\n"++linShowStmt s ++"    "++show p++"\n") aa
     in trace (lll++"\n"++aaa)
 
 mapArgs as = map (\((_,n),v)->(n,[v])) zas
@@ -356,7 +356,7 @@ allocateRegisters ss args regMap =
                                     (X.Register h:_) -> do
                                         reclaim [n]
                                         let t = findType n
-                                        assignReg n t h
+                                        assignReg n t (X.topReg h)
                                     _ -> return ()
                             Nothing -> return ()
     

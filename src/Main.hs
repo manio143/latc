@@ -21,6 +21,7 @@ import Desugaring
 import TypeChecker
 import ConstantFolder
 import ReturnChecker
+import ScopeRenamer
 import qualified LinearRepresentation as L
 import FrontendBackendTranslator
 import CommonExpSubstitution
@@ -95,7 +96,9 @@ processAST progs print = do
     liftIO $ dumpPass print 12 (S.printi 0 passTwo)
     passThree <- liftExcept $ checkReturnPaths passTwo
     liftIO $ dumpPass print 13 (S.printi 0 passThree)
-    return (passThree, cls)
+    passFour <- liftExcept $ renameScopedVars passThree
+    liftIO $ dumpPass print 14 (S.printi 0 passFour)
+    return (passFour, cls)
 
 dumpPass print pass contents =
     if isJust print then
