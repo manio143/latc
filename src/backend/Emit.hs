@@ -40,7 +40,7 @@ emitString (l,s) = tell [X.SetLabel l, X.DB (X.Label (show s)), X.DB (X.Constant
 
 emitF :: Function -> Writer [X.Instruction] ()
 emitF (Fun l _ args body) = do
-    trace l tell [X.Global l, X.SetLabel l]
+    tell [X.Global l, X.SetLabel l]
     emitB args body
 
 emitB args body = do
@@ -48,7 +48,7 @@ emitB args body = do
         withRefCounters = liveness {-addRefCounters liveness args-}
         regMap = mapArgs args
         (alreg, stack) = allocateRegisters withRefCounters args regMap
-    (trace_ liveness alreg) emitI alreg stack
+    emitI alreg stack {-(trace_ liveness alreg)-}
 
 tracel ll = trace (concat $ map (\(s,li,lo) -> linShowStmt s ++"    "++show li++"   "++show lo++"\n") ll)
 

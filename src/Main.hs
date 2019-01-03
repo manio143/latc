@@ -28,6 +28,7 @@ import CommonExpSubstitution
 import ValuePropagation
 import qualified Assembly as X
 import Emit
+import CleanupX86
 
 data CompilerArgs = CArgs {help :: Bool, outFile :: Maybe FilePath, printPass :: Bool, files :: [FilePath]}
 
@@ -70,39 +71,53 @@ process args = do
         Left err -> reportError err
         Right (ast, cls) -> do
             let lin1 = translate ast cls
-            dumpPass print 20 (L.linShow lin1)
-            let lin2 = propagateValues lin1
-            dumpPass print 21 (L.linShow lin2)
-            let lin3 = subCommonExps lin2
-            dumpPass print 22 (L.linShow lin3)
-            let lin4 = propagateValues lin3
-            dumpPass print 23 (L.linShow lin4)
+            dumpPass print 'L' 0 (L.linShow lin1)
+            opt <- optimizeLIR print lin1
+
+            let x1 = emit opt
+                x2 = cleanupX86 x1
+            dumpPass print 'X' 0 (X.printX86 x1)
             
             let fileName = fromJust (outFile args)
             let asmName = fileName ++ ".s"
-            writeFile asmName (X.printX86 $ emit lin4)
+            writeFile asmName (X.printX86 x2)
 
             let objName = fileName ++ ".o"
             callProcess "nasm" [asmName, "-o", objName, "-f elf64"]
             callProcess "gcc" [objName, "runtime", "-o", fileName, "-lunistring"]
 
+optimizeLIR print l = prop 1 l
+    where
+        prop i l = do
+            let l' = propagateValues l
+            if l == l' then return l
+            else do
+                dumpPass print 'L' i (L.linShow l)
+                sub (i+1) l'
+        sub i l = do
+            let l' = subCommonExps l
+            if l == l' then return l
+            else do
+                dumpPass print 'L' i (L.linShow l)
+                prop (i+1) l'
+
 processAST :: Program S.Position -> Maybe FilePath -> ExceptT (String, S.Position) IO (S.Program S.Position, [Class])
 processAST progs print = do
     let ast = desugar progs
-    liftIO $ dumpPass print 10 (S.printi 0 ast)
+    liftIO $ dumpPass print 'F' 0 (S.printi 0 ast)
     (passOne, cls) <- liftExcept $ checkTypes ast
-    liftIO $ dumpPass print 11 (S.printi 0 passOne)
+    liftIO $ dumpPass print 'F' 1 (S.printi 0 passOne)
     passTwo <- liftExcept $ foldConstants passOne
-    liftIO $ dumpPass print 12 (S.printi 0 passTwo)
+    liftIO $ dumpPass print 'F' 2 (S.printi 0 passTwo)
     passThree <- liftExcept $ checkReturnPaths passTwo
-    liftIO $ dumpPass print 13 (S.printi 0 passThree)
+    liftIO $ dumpPass print 'F' 3 (S.printi 0 passThree)
     passFour <- liftExcept $ renameScopedVars passThree
-    liftIO $ dumpPass print 14 (S.printi 0 passFour)
+    liftIO $ dumpPass print 'F' 4 (S.printi 0 passFour)
     return (passFour, cls)
 
-dumpPass print pass contents =
+dumpPass print phase pass contents =
     if isJust print then
-        writeFile (fromJust print ++ ".pass" ++ show pass) contents
+        writeFile (fromJust print ++ ".pass_" ++ phase : '_' :  show pass) contents
     else return ()
 
 parseFile file = do
