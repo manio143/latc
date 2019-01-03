@@ -19,6 +19,8 @@ char *errMsg;
 int _new_counter = 0;
 int _free_counter = 0;
 
+uint8_t emptyString[] = "";
+
 obj __new(struct Type *t) {
     _new_counter++;
     obj r = malloc(sizeof(struct Reference));
@@ -46,7 +48,7 @@ void __free(obj r) {
             free(els);
     } else if (r->type == &_class_String) {
         void *els = ((struct String *)r->data)->data;
-        if (els != NULL)
+        if (els != NULL && els != emptyString)
             free(els);
     }
     if (r->data != NULL)
@@ -64,7 +66,7 @@ void __decRef(obj r) {
         if (r->counter <= 0) {
             if (r->type != &_class_Array) {
                 for (int i = 0; i < r->type->referenceOffsetsSize; i++)
-                    __decRef(*(obj*)(r->data + r->type->referenceOffsets[i]));
+                    __decRef(*(obj *)(r->data + r->type->referenceOffsets[i]));
             }
             __free(r);
         }
@@ -124,8 +126,6 @@ void __checkNull(obj o) {
     }
 }
 
-uint8_t emptyString[] = "";
-
 obj __createString(char *c) {
     obj r = __new(&_class_String);
     struct String *str = malloc(sizeof(struct String));
@@ -140,8 +140,10 @@ obj __createString(char *c) {
         str->data = malloc(len + 1);
         memcpy(str->data, c, len);
         str->data[len] = 0;
-    } else
+    } else {
         str->data = emptyString;
+        return r;
+    }
     str->length = 0;
     uint8_t *walker = str->data;
     while (walker != NULL) {
@@ -265,6 +267,7 @@ obj _String_substring(obj str, int32_t startIndex, int32_t length) {
     u8_strncpy(buffer, offset_str, bufferSize);
     buffer[bufferSize - 1] = 0;
     obj ret = __createString(buffer);
+    __incRef(ret);
     free(buffer);
     return ret;
 }
@@ -296,6 +299,7 @@ obj _String_getBytes(obj str) {
     int32_t len = rs == NULL ? 0 : u8_strlen(rs);
     obj arr = __newByteArray(len + 1);
     u8_strcpy(((struct Array *)str->data)->elements, rs);
+    __incRef(arr);
     return arr;
 }
 int8_t _String_endsWith(obj str, obj substr) {
@@ -318,6 +322,7 @@ obj _String_concat(obj str, obj secondstr) {
     u8_strcpy(buffer + len1, rs2);
     buffer[len1 + len2] = 0;
     obj ret = __createString(buffer);
+    __incRef(ret);
     free(buffer);
     return ret;
 }
@@ -360,7 +365,9 @@ int8_t printBoolean(int8_t b) {
 obj intToString(int32_t i) {
     char buffer[11];
     sprintf(buffer, "%d", i);
-    return __createString(buffer);
+    obj ret = __createString(buffer);
+    __incRef(ret);
+    return ret;
 }
 
 int8_t print(obj o) {
@@ -392,6 +399,7 @@ obj readString() {
     size = u8_strlen(line);
     line[size - 1] = 0; // remove newline
     obj l = __createString(line);
+    __incRef(l);
     free(line);
     return l;
 }

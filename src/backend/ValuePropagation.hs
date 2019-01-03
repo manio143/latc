@@ -14,7 +14,7 @@ type SM = State [(Name, Value)]
 
 propS stmts = 
     let stmts' = evalState (walk stmts []) [] in
-    if stmts == stmts' then stmts
+    if stmts == stmts' then fixSelfSubstitution stmts
     else propS stmts'
   where
     --walk (s:ss) _ | trace (linShowStmt s) False = undefined
@@ -171,3 +171,10 @@ find :: Name -> SM (Maybe Value)
 find n = do
     st <- get
     return $ lookup n st
+
+fixSelfSubstitution (VarDecl t n e : ss) | elem n (usedE e) =
+    VarDecl t (n++"_f") e : VarDecl t n (Val (Var (n++"_f"))) : fixSelfSubstitution ss
+fixSelfSubstitution (Assign t (Variable n) e : ss) | elem n (usedE e) =
+    VarDecl t (n++"_f") e : Assign t (Variable n) (Val (Var (n++"_f"))) : fixSelfSubstitution ss
+fixSelfSubstitution (s:ss) = s : fixSelfSubstitution ss
+fixSelfSubstitution [] = []
