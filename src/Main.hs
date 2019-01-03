@@ -92,13 +92,13 @@ optimizeLIR print l = prop 1 l
             let l' = propagateValues l
             if l == l' then return l
             else do
-                dumpPass print 'L' i (L.linShow l)
+                dumpPass print 'L' i (L.linShow l')
                 sub (i+1) l'
         sub i l = do
             let l' = subCommonExps l
             if l == l' then prop i l
             else do
-                dumpPass print 'L' i (L.linShow l)
+                dumpPass print 'L' i (L.linShow l')
                 prop (i+1) l'
 
 processAST :: Program S.Position -> Maybe FilePath -> ExceptT (String, S.Position) IO (S.Program S.Position, [Class])

@@ -17,6 +17,11 @@ propS stmts =
     if stmts == stmts' then stmts
     else propS stmts'
   where
+    --walk (s:ss) _ | trace (linShowStmt s) False = undefined
+    walk (VarDecl t n e : VarDecl t' n' (Val (Var m)) : ss) seen | m == n =
+        walk (VarDecl t n' e : ss) seen
+    walk (VarDecl t n e : Assign t' (Variable n') (Val (Var m)) : ss) seen | m == n =
+        walk (Assign t (Variable n') e : ss) seen
     walk (s:ss) seen = do
         s' <- case s of
                 VarDecl t n e -> do

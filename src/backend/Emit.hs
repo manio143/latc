@@ -25,30 +25,38 @@ emitP (Program structs funcs strs) = do
 
 emitS :: Structure -> Writer [X.Instruction] ()
 emitS (Struct l par s fs ms) = do
+    let referenceFields = filter (\(_,t,_)->t==Reference) fs
+        refsLength = fromIntegral $ length referenceFields
     tell [
         X.Global l,
         X.SetLabel l,
         X.DQ (fromMaybe (X.Constant 0) (par >>= return . X.Label)),
         X.DD (X.Constant s),
         X.DQ (X.Label (l++"_methods")),
+        X.DD (X.Constant refsLength),
+        X.DQ (if refsLength > 0 then X.Label (l++"_refs") else X.Constant 0),
         X.SetLabel (l++"_methods")
           ]
     tell $ map (\m -> X.DQ (X.Label m)) ms
+    if refsLength > 0 then do
+        tell [X.SetLabel (l++"_refs")]
+        tell $ map (\(_,_,o)-> X.DD (X.Constant o)) referenceFields
+    else return ()
 
 emitString :: (Label, String) -> Writer [X.Instruction] ()
 emitString (l,s) = tell [X.SetLabel l, X.DB (X.Label (show s)), X.DB (X.Constant 0)]
 
 emitF :: Function -> Writer [X.Instruction] ()
 emitF (Fun l _ args body) = do
-    tell [X.Global l, X.SetLabel l]
+    trace l tell [X.Global l, X.SetLabel l]
     emitB args body
 
 emitB args body = do
     let liveness = analize body
-        withRefCounters = liveness {-addRefCounters liveness args-}
+        withRefCounters = addRefCounters liveness args
         regMap = mapArgs args
         (alreg, stack) = allocateRegisters withRefCounters args regMap
-    emitI alreg stack {-(trace_ liveness alreg)-}
+    tracel withRefCounters emitI alreg stack {-(trace_ liveness alreg)-}
 
 tracel ll = trace (concat $ map (\(s,li,lo) -> linShowStmt s ++"    "++show li++"   "++show lo++"\n") ll)
 
@@ -128,33 +136,46 @@ addRefCounters ss args = evalState run 0
                 else do
                     d <- decr n
                     walk ss refs (ds ++ d : i : s : acc)
-            Assign t tg e -> do
+            Assign Reference tg e -> do
                 case tg of
-                    Variable v -> 
-                        if elem v refs then do
-                            d <- decr v
-                            i <- incr v
-                            walk ss refs (ds ++ d : s : i : acc)
-                        else walk ss refs (ds ++ s : acc)
-                    --Array n v ->
-                        -- TODO check if n was declared or assigned a ref[]
-                        -- and if so then emit 
-                        -- > var aX = n[v]
-                        -- > __decr(aX)
-                        -- > aX = e
-                        -- > __incr(aX)
-                        -- > n[v] = aX
-                        -- maybe?
-                    _ -> walk ss refs (ds ++ s : acc)
-            --ReturnVal e ->
-                -- TODO if e is an object
-                -- > var aX = e
-                -- > __incr(aX)
-                -- > $ds
-                -- > return aX
-
-            _ -> walk ss refs ( s : ds ++ acc)
+                    Variable v -> do
+                        i <- incr v
+                        walk ss refs (ds ++ i : s : acc)
+                    Array n v -> do
+                        x <- newVar
+                        let aX = VarDecl Reference x (ArrAccess n v)
+                        dx <- decr x
+                        let bX = Assign Reference (Variable x) e
+                        ix <- incr x
+                        let fin = Assign Reference tg (Val (Var x))
+                        walk ss refs (ds ++ fin : ix : bX : dx : aX : acc)
+                    Member n o -> do
+                        x <- newVar
+                        let aX = VarDecl Reference x (MemberAccess n o)
+                        dx <- decr x
+                        let bX = Assign Reference (Variable x) e
+                        ix <- incr x
+                        let fin = Assign Reference tg (Val (Var x))
+                        walk ss refs (ds ++ fin : ix : bX : dx : aX : acc)
+            ReturnVal Reference e -> do
+                x <- newVar
+                let aX = VarDecl Reference x e
+                i <- incr x
+                let ret = ReturnVal Reference (Val (Var x))
+                walk ss refs (ret : ds ++ i : aX : acc)
+            ReturnVal _ _ -> walk ss refs (s : ds ++ acc)
+            Return -> walk ss refs (s : ds ++ acc)
+            Jump _ -> walk ss refs (s : ds ++ acc)
+            JumpZero _ _ -> killIfNoJump ss tin refs s ds acc
+            JumpNotZero _ _ -> killIfNoJump ss tin refs s ds acc
+            JumpNeg _ _ -> killIfNoJump ss tin refs s ds acc
+            JumpPos _ _ -> killIfNoJump ss tin refs s ds acc
+            _ -> walk ss refs (ds ++ s :  acc)
     walk [] _ acc = return $ analize (reverse acc)
+    killIfNoJump ss tin refs s ds acc = do
+        let deadIfNotJumped = filter (\i -> not $ elem i (let (_,ti,_) = head ss in ti)) tin
+        dds <- kill deadIfNotJumped refs
+        walk ss refs (dds ++ s : ds ++ acc)
     newVar :: State Int String
     newVar = do
         i <- get
@@ -590,6 +611,7 @@ emitI stmts stackSize = do
     emitExpr t (Cast l v) target prep =
         emitCall t (X.Label "__cast") [v, Const (StringC l)] target prep
     emitExpr t (MCall n idx vs) target prep@(umap, afr) = do
+        checkIfNull n prep
         emitExpr Nothing (Val (Var n)) (X.Register X.RBX) prep
         tell [
             X.MOV (X.Register X.R12) (X.Memory X.RBX Nothing Nothing),

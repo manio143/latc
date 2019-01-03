@@ -86,6 +86,7 @@ stripClassName pm = case findIndex (== '_') (drop 1 pm) of
 
 ct (A.BoolT _) = B.ByteT
 ct (A.ByteT _) = B.ByteT
+ct (A.VoidT _) = B.ByteT
 ct (A.IntT _) = B.IntT
 ct _ = B.Reference
 

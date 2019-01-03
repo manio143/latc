@@ -5,7 +5,9 @@ struct Type {
     struct Type *parent;
     int32_t dataSize;
     void *methods;
-} __attribute__((__packed__ ));
+    int32_t referenceOffsetsSize;
+    int32_t *referenceOffsets;
+} __attribute__((__packed__));
 
 struct Reference {
     struct Type *type;

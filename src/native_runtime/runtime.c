@@ -6,6 +6,7 @@
 #include "runtime.h"
 
 extern void bzero(void *s, size_t n);
+extern void *memcpy(void *dest, const void *src, size_t n);
 
 extern struct Type _class_Array;
 extern struct Type _class_Object;
@@ -16,6 +17,7 @@ typedef obj (*toStringPtr)(obj);
 char *errMsg;
 
 obj __new(struct Type *t) {
+    printf("__new\n");
     obj r = malloc(sizeof(struct Reference));
     r->type = t;
     r->counter = 0;
@@ -29,6 +31,7 @@ obj __new(struct Type *t) {
 }
 
 void __free(obj r) {
+    printf("__free\n");
     if (r->type == &_class_Array) {
         struct Array *arr = r->data;
         void **els = arr->elements;
@@ -55,8 +58,13 @@ void __incRef(obj r) {
 void __decRef(obj r) {
     if (r != NULL) {
         r->counter--;
-        if (r->counter <= 0)
+        if (r->counter <= 0) {
+            if (r->type != &_class_Array) {
+                for (int i = 0; i < r->type->referenceOffsetsSize; i++)
+                    __decRef(*(obj*)(r->data + r->type->referenceOffsets[i]));
+            }
             __free(r);
+        }
     }
 }
 
@@ -125,9 +133,10 @@ obj __createString(char *c) {
         error();
     }
     if (str->length > 0) {
-        str->data = malloc(str->length + 1);
-        u8_strncpy(str->data, c, str->length);
-        str->data[str->length] = 0;
+        int len = str->length;
+        str->data = malloc(len + 1);
+        memcpy(str->data, c, len);
+        str->data[len] = 0;
     } else
         str->data = emptyString;
     str->length = 0;
@@ -281,7 +290,7 @@ int32_t _String_indexOf(obj str, obj substr, int32_t startFrom) {
 }
 obj _String_getBytes(obj str) {
     uint8_t *rs = ((struct String *)str->data)->data;
-    int32_t len = u8_strlen(rs);
+    int32_t len = rs == NULL ? 0 : u8_strlen(rs);
     obj arr = __newByteArray(len + 1);
     u8_strcpy(((struct Array *)str->data)->elements, rs);
     return arr;
