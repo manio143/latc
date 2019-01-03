@@ -476,6 +476,7 @@ emitI stmts stackSize = do
                 emitExpr (Just t) e (X.Memory X.R13 Nothing Nothing) prep
             Member m off -> do
                 let (X.Register reg) = fromJust $ getReg umap m
+                checkIfNull m prep
                 tell [X.MOV (X.Register X.R13) (X.Memory reg Nothing (Just 0x08))]
                 emitExpr (Just t) e (X.Memory X.R13 Nothing (Just off)) prep
         spillAndLoad prep after
@@ -615,6 +616,7 @@ emitI stmts stackSize = do
                        X.MOV target (X.Register rbx)]
     emitExpr t (MemberAccess n off) target prep@(umap,_) = do
         let (X.Register reg) = fromJust (getReg umap n)
+        checkIfNull n prep
         tell [
             X.MOV (X.Register X.R13) (X.Memory reg Nothing (Just 0x08)),
             --get pointer to data
@@ -695,6 +697,8 @@ emitI stmts stackSize = do
     opSize And = ByteT
     opSize Or = ByteT
     opSize _ = IntT
+
+    checkIfNull n prep = emitCall Nothing (X.Label "__checkNull") [Var n] (X.Register X.RAX) prep
 
     emitCall t fun vs target prep@(umap,fr) = do
         doneCall <- prepareCall fr

@@ -41,6 +41,8 @@ void *__getelementptr(obj array, int32_t index);
 
 obj __cast(obj o, struct Type *t);
 
+void __checkNull(obj o);
+
 obj __createString(char *c);
 
 // BuiltIn classes' methods

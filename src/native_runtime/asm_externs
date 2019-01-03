@@ -7,6 +7,7 @@ extern __newIntArray
 extern __newByteArray
 extern __getelementptr
 extern __cast
+extern __checkNull
 extern __createString
 extern _Object_toString
 extern _Object_getHashCode

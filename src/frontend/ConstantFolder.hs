@@ -187,7 +187,7 @@ foldE (App p el es) = do
     nel <- foldE el
     checkNull nel p
     nes <- mapM foldE es
-    return (App p nel nes)
+    checkForNullComparison (App p nel nes)
 foldE (Member p el id mt) = do
     nel <- foldE el
     checkNull nel p
@@ -208,6 +208,7 @@ foldE (Cast p t e) = do
         (ByteT _, Lit p2 (Int _ b)) -> 
             if b < 256 && b >= 0 then return (Lit p2 (Byte p2 b))
             else return (Cast p t ne)
+        (ClassT _ _, Lit p2 (Null _)) -> return (Lit p2 (Null p2))
         _ -> return (Cast p t ne)
 foldE (Var p id@(Ident _ n)) = do
     env <- ask
@@ -319,3 +320,8 @@ checkNull _ _ = return ()
 checkNegative :: Expr Position -> Position -> OuterMonad ()
 checkNegative (Lit _ (Int _ i)) pos | i < 0 = throw ("Index is always negative", pos)
 checkNegative _ _ = return ()
+
+checkForNullComparison :: Expr Position -> OuterMonad (Expr Position)
+checkForNullComparison (App p (Member pp el (Ident _ eq) mt) [l@(Lit ppp (Null pppp))]) | eq == "equals" =
+    return (BinaryOp p (Equ pp) el l)
+checkForNullComparison e = return e

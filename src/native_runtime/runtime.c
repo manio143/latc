@@ -82,6 +82,10 @@ obj __newArray(int32_t size, int32_t length) {
 }
 
 void *__getelementptr(obj array, int32_t index) {
+    if (array == NULL) {
+        errMsg = "ERROR: Array is null.";
+        error();
+    }
     struct Array *arr = ((struct Array *)array->data);
     if (index >= arr->length || index < 0) {
         errMsg = "ERROR: Array index out of range.";
@@ -91,6 +95,8 @@ void *__getelementptr(obj array, int32_t index) {
 }
 
 obj __cast(obj o, struct Type *t) {
+    if (o == NULL)
+        return NULL;
     struct Type *to = o->type;
     while (to != NULL) {
         if (t == to)
@@ -98,6 +104,13 @@ obj __cast(obj o, struct Type *t) {
         to = to->parent;
     }
     return NULL;
+}
+
+void __checkNull(obj o) {
+    if (o == NULL) {
+        errMsg = "ERROR: Null pointer reference.";
+        error();
+    }
 }
 
 uint8_t emptyString[] = "";
