@@ -176,6 +176,7 @@ addBuiltInFunctions funs = builtIn ++ funs
                 Fun (name "printString") void [string],
                 Fun (name "printInt") void [int],
                 Fun (name "printBoolean") void [bool],
+                Fun (name "boolToString") string [bool],
                 Fun (name "intToString") string [int],
                 Fun (name "print") void [object],
                 Fun (name "error") void [],
@@ -391,6 +392,7 @@ tcanBeCastUp classes tFrom tTo = do
         (ByteT _, IntT _) -> return True
         (StringT _, ClassT _ (Ident _ "String")) -> return True
         (StringT _, ClassT _ (Ident _ "Object")) -> return True
+        (ArrayT _ _, ClassT _ (Ident _ "Object")) -> return True
         (ClassT _ (Ident _ "String"), StringT _) -> return True
         (ClassT _ idSon, ClassT _ idPar) -> if idSon == idPar then return True
                                           else isParent classes idSon idPar
@@ -426,6 +428,7 @@ canBeCastDown tFrom tTo =
             b1 <- lift $ isParent classes idTo idFrom
             b2 <- lift $ isParent classes idFrom idTo
             return (b1 || b2)
+        (ClassT _ (Ident _ "Object"), ArrayT _ _) -> return True
         _ -> canBeCastUp tTo tFrom
 
 equivalentType cls t1 t2 = do
@@ -586,6 +589,14 @@ checkE (BinaryOp pos op el er) = do
         (Add _, StringT _, ClassT _ (Ident _ "String")) -> return (App pos (Member pos nel (name "concat") (Just "String")) [ner], elt)
         (Add _, ClassT _ (Ident _ "String"), StringT _) -> return (App pos (Member pos nel (name "concat") (Just "String")) [ner], ert)
         (Add _, StringT _, StringT _) -> return (App pos (Member pos nel (name "concat") (Just "String")) [ner], ert)
+        (Add _, StringT _, ClassT _ _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Member BuiltIn ner (name "toString") Nothing) []])
+        (Add _, StringT _, BoolT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "boolToString")) [ner]])
+        (Add _, StringT _, IntT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "intToString")) [ner]])
+        (Add _, StringT _, ByteT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "intToString")) [ner]])
+        (Add _, ClassT _ (Ident _ "String"), ClassT _ _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Member BuiltIn ner (name "toString") Nothing) []])
+        (Add _, ClassT _ (Ident _ "String"), BoolT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "boolToString")) [ner]])
+        (Add _, ClassT _ (Ident _ "String"), IntT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "intToString")) [ner]])
+        (Add _, ClassT _ (Ident _ "String"), ByteT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "intToString")) [ner]])
         (Equ _, ClassT _ (Ident _ "String"), StringT _) -> return (App pos (Member pos nel (name "equals") (Just "String")) [ner], bool)
         (Equ _, StringT _, ClassT _ (Ident _ "String")) -> return (App pos (Member pos nel (name "equals") (Just "String")) [ner], bool)
         (Equ _, StringT _, StringT _) -> return (App pos (Member pos nel (name "equals") (Just "String")) [ner], bool)
