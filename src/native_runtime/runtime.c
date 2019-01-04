@@ -186,7 +186,6 @@ obj _Array_toString(obj arr) {
             obj (*toString)(obj) = ((void **)element->type->methods)[0];
             strings[i] = toString(element);
         }
-        __incRef(strings[i]);
         lenghts[i] = u8_strlen(((struct String *)strings[i]->data)->data);
         totalLenght += lenghts[i];
     }
@@ -210,13 +209,17 @@ obj _Array_toString(obj arr) {
     u8_strcpy(buffer + index, end);
     buffer[bufferSize - 1] = 0;
     obj ret = __createString(buffer);
+    __incRef(ret);
     free(lenghts);
     free(strings);
     free(buffer);
     return ret;
 }
 
-obj _String_toString(obj str) { return str; }
+obj _String_toString(obj str) {
+    __incRef(str);
+    return str;
+}
 int32_t _String_getHashCode(obj str) {
     int32_t hash = 0x811c9dc5;
     uint8_t *rawstring = ((struct String *)str->data)->data;
@@ -348,8 +351,10 @@ int32_t _String_charAt(obj str, int32_t index) {
 
 // functions
 int8_t printString(obj str) {
+    __incRef(str);
     uint8_t *rs = ((struct String *)str->data)->data;
     printf("%s\n", rs);
+    __decRef(str);
     return 0;
 }
 int8_t printInt(int32_t i) {
@@ -372,11 +377,12 @@ obj intToString(int32_t i) {
 }
 
 int8_t print(obj o) {
+    __incRef(o);
     obj (*toStr)(obj) = ((void **)o->type->methods)[0];
     obj str = toStr(o);
-    __incRef(str);
     printString(str);
     __decRef(str);
+    __decRef(o);
 }
 
 int8_t error() {

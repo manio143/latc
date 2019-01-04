@@ -25,7 +25,7 @@ int main() {
     obj s = __createString("Hello World!");
     __incRef(s);
     obj subs = _String_substring(s, 2, 3);
-    __incRef(subs);
+    //__incRef(subs);
     obj esubs = __createString("llo");
     __incRef(esubs);
     if (_String_equals(subs, esubs)) {
@@ -36,9 +36,9 @@ int main() {
         print(subs);
     }
     obj es = _String_concat(s, subs);
-    __incRef(es);
+    //__incRef(es);
     obj hundred = intToString(100);
-    __incRef(hundred);
+    //__incRef(hundred);
     if(__cast(s, &_class_Array) == NULL && __cast(iarr, &_class_Array) != NULL) {
         printf("Ok: casting\n");
     } else {
