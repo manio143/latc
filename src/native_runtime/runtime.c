@@ -18,6 +18,8 @@ char *errMsg;
 
 int _new_counter = 0;
 int _free_counter = 0;
+int _inc_counter = 0;
+int _dec_counter = 0;
 
 uint8_t emptyString[] = "";
 
@@ -57,12 +59,15 @@ void __free(obj r) {
 }
 
 void __incRef(obj r) {
-    if (r != NULL)
+    if (r != NULL) {
         r->counter++;
+        _inc_counter++;
+    }
 }
 void __decRef(obj r) {
     if (r != NULL) {
         r->counter--;
+        _dec_counter++;
         if (r->counter <= 0) {
             if (r->type != &_class_Array) {
                 for (int i = 0; i < r->type->referenceOffsetsSize; i++)

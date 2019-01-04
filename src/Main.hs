@@ -26,6 +26,8 @@ import qualified LinearRepresentation as L
 import FrontendBackendTranslator
 import CommonExpSubstitution
 import ValuePropagation
+import LivenessAnalysis
+import RefCount
 import qualified Assembly as X
 import Emit
 import CleanupX86
@@ -72,9 +74,15 @@ process args = do
         Right (ast, cls) -> do
             let lin1 = translate ast cls
             dumpPass print 'L' 0 (L.linShow lin1)
-            opt <- optimizeLIR print lin1
+            (opt,i) <- optimizeLIR print lin1
+            let liveness = analizeProg opt
+            dumpPass print 'L' (i+1) (analisisPrint liveness)
+            let linR = addRefCount opt
+            dumpPass print 'L' (i+2) (L.linShow linR)
+            let livenessR = analizeProg linR
+            dumpPass print 'L' (i+3) (analisisPrint livenessR)
 
-            let x1 = emit opt
+            let x1 = emit linR
                 x2 = cleanupX86 x1
             dumpPass print 'X' 0 (X.printX86 x1)
             
@@ -90,7 +98,7 @@ optimizeLIR print l = prop 1 l
     where
         prop i l = do
             let l' = propagateValues l
-            if l == l' then return l
+            if l == l' then return (l,i)
             else do
                 dumpPass print 'L' i (L.linShow l')
                 sub (i+1) l'

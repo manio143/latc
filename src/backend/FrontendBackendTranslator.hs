@@ -223,23 +223,16 @@ emitS (A.ExprStmt _ e) = emitE e >> return ()
 emitS (A.BlockStmt _ b) = emitB b
 emitS (A.IfElse _ ec st sf) = do
     enc <- emitE ec
-    case sf of
-        A.Empty _ -> do
-            lend <- lift $ newLabel "_I"
-            tell [B.JumpZero lend (B.Var enc)]
-            emitS st
-            tell [B.SetLabel lend]            
-        _ -> do
-            lelse <- lift $ newLabel "_I"
-            lend <- lift $ newLabel "_I"
-            tell [B.JumpZero lelse (B.Var enc)]
-            emitS st
-            tell [B.Jump lend, B.SetLabel lelse]
-            emitS sf
-            tell [B.SetLabel lend]
+    lelse <- lift $ newLabel "_IELSE"
+    lend <- lift $ newLabel "_IEND"
+    tell [B.JumpZero lelse (B.Var enc)]
+    emitS st
+    tell [B.Jump lend, B.SetLabel lelse]
+    emitS sf
+    tell [B.SetLabel lend]
 emitS (A.While _ ec s) = do
-    lcond <- lift $ newLabel "_W"
-    lbegin <- lift $ newLabel "_W"
+    lcond <- lift $ newLabel "_WCOND"
+    lbegin <- lift $ newLabel "_WBEG"
     tell [B.Jump lcond, B.SetLabel lbegin]
     emitS s
     tell [B.SetLabel lcond]

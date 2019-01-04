@@ -8,11 +8,13 @@ cleanupX86 (Program is) = Program (clean is)
 clean (MOV a b : is) | a == b = clean is
 clean (MOV x y : MOV x' z : is) | x == x' && notDependent x z = clean (MOV x z : is)
 clean (MOV x y : MOV y' x' : is) | x == x' && y == y' = clean (MOV x y : is)
+
 clean (MOV bx x : SUB bx' y : MOV x' bx'' : is) | bx == bx' && bx == bx'' && x == x' = clean (SUB x y : is)
 clean (MOV bx x : ADD bx' y : MOV x' bx'' : is) | bx == bx' && bx == bx'' && x == x' = clean (ADD x y : is)
 clean (MOV bx x : ADD bx' y : MOV y' bx'' : is) | bx == bx' && bx == bx'' && y == y' = clean (ADD y x : is)
 clean (MOV bx x : IMUL bx' y : MOV x' bx'' : is) | bx == bx' && bx == bx'' && x == x' = clean (IMUL x y : is)
 clean (MOV bx x : IMUL bx' y : MOV y' bx'' : is) | bx == bx' && bx == bx'' && y == y' = clean (IMUL y x : is)
+clean (JMP (Label v) : SetLabel el : SetLabel en : is) | v == en = clean (SetLabel el : SetLabel en : is)
 
 clean (i:is) = i : clean is
 clean [] = []

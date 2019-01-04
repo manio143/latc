@@ -11,6 +11,7 @@ import Debug.Trace
 import qualified Assembly as X
 import ValuePropagation
 import LinearRepresentation
+import LivenessAnalysis
 
 emit :: Program -> X.Program
 emit p = X.Program $ execWriter (emitP p)
@@ -53,9 +54,8 @@ emitF (Fun l _ args body) = do
 
 emitB args body = do
     let liveness = analize body
-        withRefCounters = addRefCounters liveness args
         regMap = mapArgs args
-        (alreg, stack) = allocateRegisters withRefCounters args regMap
+        (alreg, stack) = allocateRegisters liveness args regMap
     emitI alreg stack -- (trace_ liveness alreg)
 
 tracel ll = trace (concat $ map (\(s,li,lo) -> linShowStmt s ++"    "++show li++"   "++show lo++"\n") ll)
@@ -76,140 +76,6 @@ mapArgs as = map (\((_,n),v)->(n,[v])) zas
 st IntT = 0x04
 st ByteT = 0x01
 st Reference = 0x08
-
-
-analize :: [Stmt] -> [(Stmt, [Name],[Name])]
-analize stmts = 
-    let indexed = zip stmts [1..]
-        succ = map (findSucc indexed) indexed
-        inout = map (\(s,i,n) -> (s,i,n,[],[])) succ
-    in map (\(s,_,_,tin,tout)->(s,tin,tout)) $ work inout
-  where
-    work :: [(Stmt, Integer,[Integer],[Name],[Name])] -> [(Stmt, Integer,[Integer],[Name],[Name])]
-    work inout =
-        let ninout = map (proc inout) inout in
-        if ninout /= inout then work ninout
-        else ninout
-    proc inout (s,i,n,tin,tout) =
-        let succ = concat $ map (\nn -> filter (\(_,ii,_,_,_) -> nn == ii) inout) n
-            succin = map (\(_,_,_,sin,_)->sin) succ
-        in (s,i,n,nub $ used s ++ (tout \\ assigned s),nub $ concat succin)
-
-findSucc :: [(Stmt, Integer)] -> (Stmt, Integer) -> (Stmt, Integer, [Integer])
-findSucc ind (s,i) = 
-    case s of
-        Jump l -> (s,i,[findIndex ind (SetLabel l)])
-        JumpZero l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
-        JumpNotZero l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
-        JumpNeg l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
-        JumpPos l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
-        ReturnVal _ _ -> (s,i,[])
-        Return -> (s,i,[])
-        _ -> (s,i,[i+1])
-    where
-        findIndex ind s = snd $ head $ filter (\(s',i)->s==s') ind
-
-addRefCounters :: [(Stmt, [Name],[Name])] -> [(Type,Name)] -> [(Stmt, [Name],[Name])]
-addRefCounters ss args = evalState run 0
-  where
-    run = do
-        (a,r) <- incArgs args
-        walk ss r a
-    incArgs ((Reference, n):as) = do
-        if isLive n then do
-            i <- incr n
-            (rs, refs) <- incArgs as
-            return $ (i : rs, n:refs)
-        else incArgs as
-        where
-            isLive n = let (_,tin,_) = head ss in elem n tin
-    incArgs (_:as) = incArgs as
-    incArgs [] = return ([],[])
-    walk ((s,tin,tout):ss) refs acc = do
-        let dead = filter (\i -> not $ elem i tout) tin
-        ds <- kill dead refs
-        case s of
-            VarDecl Reference n e -> do
-                i <- incr n
-                let ii = case e of
-                            Call _ _ -> []
-                            MCall _ _ _ -> []
-                            _ -> [i]
-                if elem n tout then
-                    walk ss (n:refs) (ds ++ ii ++ s : acc)
-                else do
-                    d <- decr n
-                    walk ss (n:refs) (ds ++ d : ii ++ s : acc)
-            Assign Reference tg e -> do
-                case tg of
-                    Variable v -> do
-                        i <- incr v
-                        let ii = case e of
-                                    Call _ _ -> []
-                                    MCall _ _ _ -> []
-                                    _ -> [i]
-                        walk ss refs (ds ++ ii ++ s : acc)
-                    Array n v -> do
-                        x <- newVar
-                        let aX = VarDecl Reference x (ArrAccess n v)
-                        dx <- decr x
-                        let bX = Assign Reference (Variable x) e
-                        ix <- incr x
-                        let fin = Assign Reference tg (Val (Var x))
-                        let iix = case e of
-                                    Call _ _ -> []
-                                    MCall _ _ _ -> []
-                                    _ -> [ix]
-                        walk ss refs (ds ++ fin : iix ++ bX : dx : aX : acc)
-                    Member n o -> do
-                        x <- newVar
-                        let aX = VarDecl Reference x (MemberAccess n o)
-                        dx <- decr x
-                        let bX = Assign Reference (Variable x) e
-                        ix <- incr x
-                        let fin = Assign Reference tg (Val (Var x))
-                        let iix = case e of
-                                    Call _ _ -> []
-                                    MCall _ _ _ -> []
-                                    _ -> [ix]
-                        walk ss refs (ds ++ fin : iix ++ bX : dx : aX : acc)
-            ReturnVal Reference e -> do
-                x <- newVar
-                let aX = VarDecl Reference x e
-                i <- incr x
-                let ret = ReturnVal Reference (Val (Var x))
-                let ii = case e of
-                            Call _ _ -> []
-                            MCall _ _ _ -> []
-                            _ -> [i]
-                walk ss refs (ret : ds ++ ii ++ aX : acc)
-            ReturnVal _ _ -> walk ss refs (s : ds ++ acc)
-            Return -> walk ss refs (s : ds ++ acc)
-            Jump _ -> walk ss refs (s : ds ++ acc)
-            JumpZero _ _ -> killIfNoJump ss tin refs s ds acc dead
-            JumpNotZero _ _ -> killIfNoJump ss tin refs s ds acc dead
-            JumpNeg _ _ -> killIfNoJump ss tin refs s ds acc dead
-            JumpPos _ _ -> killIfNoJump ss tin refs s ds acc dead
-            _ -> walk ss refs (ds ++ s :  acc)
-    walk [] _ acc = return $ analize (reverse acc)
-    killIfNoJump ss tin refs s ds acc dead = do
-        let deadIfNotJumped = filter (\i -> not $ elem i (let (_,ti,_) = head ss in ti)) tin \\ dead
-        dds <- kill deadIfNotJumped refs
-        walk ss refs (dds ++ s : ds ++ acc)
-    newVar :: State Int String
-    newVar = do
-        i <- get
-        put (i+1)
-        return ("c"++show i)
-    decr n = do
-        x <- newVar
-        return (VarDecl ByteT x (Call "__decRef" [Var n]))
-    incr n = do
-        x <- newVar
-        return (VarDecl ByteT x (Call "__incRef" [Var n]))
-    kill dead refs = do
-        let deadrefs = filter (\d -> elem d refs) dead
-        mapM decr deadrefs
 
 type SM2 = State ([X.Reg], [(Name, [X.Value])], Integer)
 
