@@ -256,54 +256,23 @@ allocateRegisters sst args regMap =
                     _ -> return ()
             ReturnVal t e ->
                 assertInRegs (usedE e)
-            JumpZero _ (Var n) ->
+            Jump _ -> spill tin
+            JumpZero l (Var n) -> do
                 assertInRegs [n]
-            JumpNotZero _ (Var n) ->
+                if take 2 l /= "_C" then spill (tin \\ [n]) else return ()
+            JumpNotZero l (Var n) -> do
                 assertInRegs [n]
-            JumpNeg _ (Var n) ->
+                if take 2 l /= "_C" then spill (tin \\ [n]) else return ()
+            JumpNeg l (Var n) -> do
                 assertInRegs [n]
-            JumpPos _ (Var n) ->
+                if take 2 l /= "_C" then spill (tin \\ [n]) else return ()
+            JumpPos l (Var n) -> do
                 assertInRegs [n]
+                if take 2 l /= "_C" then spill (tin \\ [n]) else return ()
+            SetLabel l -> if take 2 l /= "_C" then spill tin else return ()
             _ -> return ()
         prep <- getst
         reclaim dead
-        case s of
-            Jump l -> do
-                let lidx = head succ
-                if lidx > i then
-                    mapM_ alloca tout
-                else do
-                    let (_,_,b,_,_) = head $ filter (\(i,_,_,_,_)->i == lidx) acc
-                    conformTo b
-            JumpZero l _ -> do
-                let lidx = head $ tail succ
-                if lidx > i then
-                    mapM_ alloca tout
-                else do
-                    let (_,_,b,_,_) = head $ filter (\(i,_,_,_,_)->i == lidx) acc
-                    conformTo b
-            JumpNotZero l _ -> do
-                let lidx = head $ tail succ
-                if lidx > i then
-                    mapM_ alloca tout
-                else do
-                    let (_,_,b,_,_) = head $ filter (\(i,_,_,_,_)->i == lidx) acc
-                    conformTo b
-            JumpNeg l _ -> do
-                let lidx = head $ tail succ
-                if lidx > i then
-                    mapM_ alloca tout
-                else do
-                    let (_,_,b,_,_) = head $ filter (\(i,_,_,_,_)->i == lidx) acc
-                    conformTo b
-            JumpPos l _ -> do
-                let lidx = head $ tail succ
-                if lidx > i then
-                    mapM_ alloca tout
-                else do
-                    let (_,_,b,_,_) = head $ filter (\(i,_,_,_,_)->i == lidx) acc
-                    conformTo b
-            _ -> return ()
         after <- getst
         allocS ss ((i,s, before,prep,after):acc) {-trace (linShowStmt s ++"   "++ show umap)-}
       where
@@ -368,6 +337,10 @@ allocateRegisters sst args regMap =
                     alloca chosen
                     reclaim [chosen]
                     freeReg >>= return . fromJust
+        spill ns = do
+            umap <- getMap
+            mapM_ alloca ns
+            reclaim ns
         firstAlreadyInMemory ((s,vs):ss) =
             if filter X.isMem vs /= [] then Just s
             else firstAlreadyInMemory ss
@@ -532,15 +505,13 @@ emitI stmts stackSize = do
     emitStmt (Return, bef, prep, aft) = do
         exit
     emitStmt ((SetLabel l), before, prep, after) = do
-        if take 2 l /= "_C" then storeToMem prep
-        else return ()        
+        spillAndLoad before prep
         tell [X.SetLabel l]
-        if take 2 l /= "_C" then loadFromMem prep
-        else return ()
+        spillAndLoad prep after
     emitStmt ((Jump l), before, prep, after) = do
         spillAndLoad before prep
-        storeToMem after
         tell [X.JMP (X.Label l)]
+        spillAndLoad prep after
     emitStmt ((JumpZero l v), before, prep@(umap,_), after) = do
         spillAndLoad before prep
         case v of
@@ -550,10 +521,9 @@ emitI stmts stackSize = do
                 let (X.Register r) = fromJust $ getReg umap n
                 let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
                 emitExpr Nothing (Val (Var n)) rbx prep
-                spillAndLoad prep after
-                storeToMem after
                 tell [X.TEST rbx rbx, X.JZ (X.Label l)]
             _ -> return ()
+        spillAndLoad prep after
     emitStmt ((JumpNotZero l v), before, prep@(umap,_), after) = do
         spillAndLoad before prep
         case v of
@@ -563,9 +533,8 @@ emitI stmts stackSize = do
                 let (X.Register r) = fromJust $ getReg umap n
                 let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
                 emitExpr Nothing (Val (Var n)) rbx prep
-                spillAndLoad prep after
-                storeToMem after
                 tell [X.TEST rbx rbx, X.JNZ (X.Label l)]
+        spillAndLoad prep after
     emitStmt ((JumpNeg l v), before, prep@(umap,_), after) = do
         spillAndLoad before prep
         case v of
@@ -575,9 +544,8 @@ emitI stmts stackSize = do
                 let (X.Register r) = fromJust $ getReg umap n
                 let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
                 emitExpr Nothing (Val (Var n)) rbx prep
-                spillAndLoad prep after
-                --storeToMem after
                 tell [X.CMP rbx (X.Constant 0), X.JL (X.Label l)]
+        spillAndLoad prep after
     emitStmt ((JumpPos l v), before, prep@(umap,_), after) = do
         spillAndLoad before prep
         case v of
@@ -587,9 +555,8 @@ emitI stmts stackSize = do
                 let (X.Register r) = fromJust $ getReg umap n
                 let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
                 emitExpr Nothing (Val (Var n)) rbx prep
-                spillAndLoad prep after
-                --storeToMem after
                 tell [X.CMP rbx (X.Constant 0), X.JG (X.Label l)]
+        spillAndLoad prep after
     prepareCall free = do
         let callerSaved = [X.R11, X.R10, X.R9, X.R8, X.RDX, X.RCX, X.RAX, X.RSI, X.RDI]
         prepare free callerSaved
