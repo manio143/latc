@@ -102,6 +102,7 @@ void *__getelementptr(obj array, int32_t index) {
     struct Array *arr = ((struct Array *)array->data);
     if (index >= arr->length || index < 0) {
         errMsg = "ERROR: Array index out of range.";
+        fprintf(stderr, "%d, %d\n", index, arr->length);
         error();
     }
     return arr->elements + index * arr->elementSize;

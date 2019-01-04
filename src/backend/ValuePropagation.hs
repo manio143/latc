@@ -18,9 +18,9 @@ propS stmts =
     else propS stmts'
   where
     --walk (s:ss) _ | trace (linShowStmt s) False = undefined
-    walk (VarDecl t n e : VarDecl t' n' (Val (Var m)) : ss) seen | m == n && neverUsed n ss =
+    walk (VarDecl t n e : VarDecl t' n' (Val (Var m)) : ss) seen | m == n && neverUsed n ss && notFix n =
         walk (VarDecl t n' e : ss) seen
-    walk (VarDecl t n e : Assign t' (Variable n') (Val (Var m)) : ss) seen | m == n && neverUsed n ss =
+    walk (VarDecl t n e : Assign t' (Variable n') (Val (Var m)) : ss) seen | m == n && neverUsed n ss && notFix n =
         walk (Assign t (Variable n') e : ss) seen
     walk (VarDecl t n (Val _) : Assign t' (Variable n') e : ss) seen | n == n' =
         walk (VarDecl t n e : ss) seen
@@ -84,6 +84,8 @@ propS stmts =
             isUsed u (Assign _ (Variable n) _) = elem n u
             isUsed _ _ = True
     neverUsed n ss = not $ elem n $ concat $ map used ss
+    notFix (n:[x,y]) = [x,y] /= "_f"
+    notFix (n:ns) = notFix ns
 
 used' (VarDecl t n e@(Call _ _)) = n : usedE e
 used' (VarDecl t n e@(MCall _ _ _)) = n : usedE e
@@ -174,9 +176,12 @@ find n = do
     st <- get
     return $ lookup n st
 
-fixSelfSubstitution (VarDecl t n e : ss) | elem n (usedE e) =
+fixSelfSubstitution (VarDecl t n e : ss) | elem n (usedE e) && notBinOp e =
     VarDecl t (n++"_f") e : VarDecl t n (Val (Var (n++"_f"))) : fixSelfSubstitution ss
-fixSelfSubstitution (Assign t (Variable n) e : ss) | elem n (usedE e) =
+fixSelfSubstitution (Assign t (Variable n) e : ss) | elem n (usedE e) && notBinOp e =
     VarDecl t (n++"_f") e : Assign t (Variable n) (Val (Var (n++"_f"))) : fixSelfSubstitution ss
 fixSelfSubstitution (s:ss) = s : fixSelfSubstitution ss
 fixSelfSubstitution [] = []
+
+notBinOp (BinOp _ _ _) = False
+notBinOp _ = True

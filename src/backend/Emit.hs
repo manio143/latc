@@ -56,7 +56,7 @@ emitB args body = do
         withRefCounters = addRefCounters liveness args
         regMap = mapArgs args
         (alreg, stack) = allocateRegisters withRefCounters args regMap
-    tracel liveness tracel withRefCounters emitI alreg stack {-(trace_ liveness alreg)-}
+    emitI alreg stack -- (trace_ liveness alreg)
 
 tracel ll = trace (concat $ map (\(s,li,lo) -> linShowStmt s ++"    "++show li++"   "++show lo++"\n") ll)
 
@@ -219,7 +219,7 @@ type Moment = (ValMap, FreeRegs)
 type StmtAlloc = (Stmt, Moment, Moment, Moment)
 
 allocateRegisters :: [(Stmt, [Name],[Name])] -> [(Type,Name)] -> [(Name, [X.Value])] -> ([StmtAlloc],Integer)
-allocateRegisters ss args regMap = 
+allocateRegisters sst args regMap = 
     let st = freeWithoutArgs regMap
         (stmts,(_,_,stack)) = runState run st
     in (stmts,stack - 8)
@@ -230,11 +230,12 @@ allocateRegisters ss args regMap =
         in (freeRegs', umap, 8)
     run = allocS withSucc []
     withSucc = 
-        let zipped = zip ss [1..]
+        let zipped = zip sst [1..]
             ind = map (\((s,_,_),i)->(s,i)) zipped
         in map (\((s,ti,to),i) -> (i,s,ti,to,thrd $ findSucc ind (s,i))) zipped
         where thrd (_,_,x) = x
     allocS :: [(Integer, Stmt, [Name], [Name], [Integer])] -> [(Integer, Stmt, Moment, Moment, Moment)] -> SM2 [StmtAlloc]
+    allocS [] acc = return $ reverse $ map (\(_,s,b,p,a) -> (s,b,p,a)) acc
     allocS ((i,s,tin,tout,succ):ss) acc = do
         before <- getst
         let dead = filter (\i -> not $ elem i tout) tin
@@ -305,102 +306,105 @@ allocateRegisters ss args regMap =
             _ -> return ()
         after <- getst
         allocS ss ((i,s, before,prep,after):acc) {-trace (linShowStmt s ++"   "++ show umap)-}
-    allocS [] acc = return $ reverse $ map (\(_,s,b,p,a) -> (s,b,p,a)) acc
-    reclaim ds = mapM_ reclaimOne ds
-    reclaimOne n = do
-        umap <- getMap
-        let freed = case lookup n umap of
-                            Just mapping ->
-                                map (\(X.Register r) -> X.topReg r) $ filter X.isReg mapping
-                            Nothing -> error ("var "++n++"is not live")
-        case freed of
-            [] -> error $ "Something is no yes " ++n++show umap
-            _ -> modify (\(free, umap, stack) -> (sort $ freed ++ free, remove n umap, stack))
-    remove n ((m,mp):ms) | n == m = 
-        let nmp = filter (not . X.isReg) mp in
-        if nmp /= [] then (n, nmp) : ms else ms
-                         | otherwise = (m,mp):remove n ms
-    remove n [] = []
-    freeReg = do
-        free <- (\(f,_,_)->f) <$> get
-        case free of
-            [] -> return Nothing
-            (h:t) -> return $ Just h
-    assertInRegs vars = do
-        umap <- getMap
-        let inregs = filter (inReg umap) vars
-            needregs = vars \\ inregs
-        mapM_ (alloc vars) needregs
-    alloc needed n = do
-        let t = findType n
-        mr <- freeReg
-        case mr of
-            Just r -> do
-                assignReg n t r
-            Nothing -> do
-                r <- spillOtherThan needed
-                assignReg n t r
-    findType n = 
-        let d = filter (\(s,_,_) -> declared s == [n]) ss in
-        if d /= [] then
-            let ((VarDecl t _ _),_,_) = head d in t
-        else fst $ head $ filter (\(t,m)->m==n) args
-    assignReg n t r = modify (\(free, umap, stack) -> (free \\ [r],insert (n, X.Register $ X.regSize t r) umap, stack))
-    insert (n, r) ((m,mp):ms) =
-        if n == m then (m, r:mp) : ms
-        else (m,mp) : insert (n,r) ms
-    insert (n,r) [] = [(n,[r])]
-    inReg umap v = case lookup v umap of
-                        Just mapping -> filter X.isReg mapping /= []
-                        Nothing -> False
-    spillOtherThan needed = do
-        umap <- getMap
-        let notneeded = filter (\(n,mp)-> (not $ elem n needed) && any X.isReg mp) umap
-        {-TODO: better strategy? -}
-            ms = firstAlreadyInMemory notneeded
-        case ms of
-            Just s -> do
-                reclaim [s]
-                freeReg >>= return . fromJust
-            Nothing -> do
-                let chosen = head $ map fst notneeded
-                alloca chosen
-                reclaim [chosen]
-                freeReg >>= return . fromJust
-    firstAlreadyInMemory ((s,vs):ss) =
-        if filter X.isMem vs /= [] then Just s
-        else firstAlreadyInMemory ss
-    firstAlreadyInMemory [] = Nothing
-    getMap = (\(_,s,_)->s) <$> get
-    alloca :: Name -> SM2 ()
-    alloca n = do
-        umap <- getMap
-        if containsMem umap n then return ()
-        else do
-            stack <- (\(_,_,t)->t) <$> get
+      where
+        reclaim ds = mapM_ reclaimOne ds
+        reclaimOne n = do
+            umap <- getMap
+            let freed = case lookup n umap of
+                                Just mapping ->
+                                    map (\(X.Register r) -> X.topReg r) $ filter X.isReg mapping
+                                Nothing -> error ("var "++n++"is not live")
+            case freed of
+                [] -> return () -- var already reclaimed
+                _ -> modify (\(free, umap, stack) -> (sort $ freed ++ free, remove n umap, stack))
+        remove n ((m,mp):ms) | n == m = 
+            let nmp = filter (not . X.isReg) mp in
+            if nmp /= [] then (n, nmp) : ms else ms
+                            | otherwise = (m,mp):remove n ms
+        remove n [] = []
+        freeReg = do
+            free <- (\(f,_,_)->f) <$> get
+            case free of
+                [] -> return Nothing
+                (h:t) -> return $ Just h
+        assertInRegs vars = do
+            umap <- getMap
+            let inregs = filter (inReg umap) vars
+                needregs = vars \\ inregs
+            mapM_ (alloc vars) needregs
+        alloc needed n = do
             let t = findType n
-            modify (\(free, umap, stack) -> (free,insert (n, X.Memory X.RBP Nothing (Just (-stack - (st t)))) umap, stack + (st t)))
+            mr <- freeReg
+            case mr of
+                Just r -> do
+                    assignReg n t r
+                Nothing -> do
+                    r <- spillOtherThan needed
+                    assignReg n t r
+        findType n = 
+            let d = filter (\(s,_,_) -> declared s == [n]) sst in
+            if d /= [] then
+                let ((VarDecl t _ _),_,_) = head d in t
+            else fst $ head $ filter (\(t,m)->m==n) args
+        assignReg n t r = modify (\(free, umap, stack) -> (free \\ [r],insert (n, X.Register $ X.regSize t r) umap, stack))
+        insert (n, r) ((m,mp):ms) =
+            if n == m then (m, r:mp) : ms
+            else (m,mp) : insert (n,r) ms
+        insert (n,r) [] = [(n,[r])]
+        inReg umap v = case lookup v umap of
+                            Just mapping -> filter X.isReg mapping /= []
+                            Nothing -> False
+        spillOtherThan needed = do
+            umap <- getMap
+            let notneeded = filter (\(n,mp)-> (not $ elem n needed) && any X.isReg mp) umap
+            {-TODO: better strategy? -}
+                ms = firstAlreadyInMemory notneeded
+            case ms of
+                Just s -> do
+                    reclaim [s]
+                    freeReg >>= return . fromJust
+                Nothing -> do
+                    let chosen = head $ map fst notneeded
+                    alloca chosen
+                    reclaim [chosen]
+                    freeReg >>= return . fromJust
+        firstAlreadyInMemory ((s,vs):ss) =
+            if filter X.isMem vs /= [] then Just s
+            else firstAlreadyInMemory ss
+        firstAlreadyInMemory [] = Nothing
+        getMap = (\(_,s,_)->s) <$> get
+        alloca :: Name -> SM2 ()
+        alloca n = do
+            umap <- getMap
+            if containsMem umap n then return ()
+            else do
+                stack <- (\(_,_,t)->t) <$> get
+                let t = findType n
+                modify (\(free, umap, stack) -> (free,insert (n, X.Memory X.RBP Nothing (Just (-stack - (st t)))) umap, stack + (st t)))
+        containsMem ((m,s):ms) n | m == n = any X.isMem s
+        containsMem (_:ms) n = containsMem ms n
+        containsMem [] _ = False
+        getst = do
+            (fr,mp,_) <- get
+            return (mp,fr)
+        conformTo (umap,_) = do
+            m <- getMap
+            mapM_ mapper m
+            where 
+                mapper (n,s) = case lookup n umap of
+                                Just mapping -> 
+                                    case filter X.isReg mapping of
+                                        (X.Register h:_) -> 
+                                            if not $ elem (X.Register h) s then do
+                                                reclaim [n]
+                                                let t = findType n
+                                                assignReg n t (X.topReg h)
+                                            else return ()
+                                        _ -> return ()
+                                Nothing -> return ()
     isUsedR m r = isUsed m (X.Register r)
-    containsMem ((m,s):ms) n | m == n = any X.isMem s
-    containsMem (_:ms) n = containsMem ms n
-    containsMem [] _ = False
-    getst = do
-        (fr,mp,_) <- get
-        return (mp,fr)
-    conformTo (umap,_) = do
-        m <- getMap
-        mapM_ mapper m
-        where 
-            mapper (n,s) = case lookup n umap of
-                            Just mapping -> 
-                                case filter X.isReg mapping of
-                                    (X.Register h:_) -> do
-                                        reclaim [n]
-                                        let t = findType n
-                                        assignReg n t (X.topReg h)
-                                    _ -> return ()
-                            Nothing -> return ()
-    
+
+        
 
 isUsed :: [(Name, [X.Value])] -> X.Value -> Bool
 isUsed ((_,s):ss) r@(X.Register rr) = elem r (map regToTop s) || isUsed ss r

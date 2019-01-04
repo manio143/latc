@@ -2,6 +2,7 @@ module CommonExpSubstitution (subCommonExps) where
 
 --import Data.List
 import Control.Monad.State
+import Debug.Trace
 
 import LinearRepresentation
 
@@ -55,6 +56,7 @@ subS stmts = evalState (walk stmts []) []
     find (Call _ _) = return Nothing
     find (MCall _ _ _) = return Nothing
     find (MemberAccess _ _) = return Nothing
+    find (ArrAccess _ _) = return Nothing
     find e = do
         st <- get
         return $ lookup e st
@@ -68,7 +70,8 @@ subS stmts = evalState (walk stmts []) []
         else
             isWlabel g seen
     isWlabel g (s:ss) = case s of
-                            SetLabel ('W':_) -> return False
+                            SetLabel ('_':'W':_) -> return False
+                            --SetLabel ('_':'I':_) -> return False
                             Assign t (Variable h) _ ->
                                 if h == g then return True
                                 else isWlabel g ss
