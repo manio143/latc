@@ -425,7 +425,7 @@ emitE (A.BinaryOp _ op el er) =
                         A.Lt _ -> (1, B.JumpNeg l (B.Var nt))
                         A.Gt _ -> (1, B.JumpPos l (B.Var nt))
                         A.Le _ -> (0, B.JumpPos l (B.Var nt))
-                        A.Ge _ -> (0, B.JumpPos l (B.Var nt))
+                        A.Ge _ -> (0, B.JumpNeg l (B.Var nt))
             tell [
                     B.VarDecl B.ByteT nb (B.Val (B.Const (B.ByteC val))),
                     B.VarDecl ent nt (B.BinOp B.Sub (B.Var enl) (B.Var enr)),

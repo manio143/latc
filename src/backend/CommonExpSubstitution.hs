@@ -71,7 +71,7 @@ subS stmts = evalState (walk stmts []) []
             isWlabel g seen
     isWlabel g (s:ss) = case s of
                             SetLabel ('_':'W':_) -> return False
-                            --SetLabel ('_':'I':_) -> return False
+                            SetLabel ('_':'I':_) -> return False
                             Assign t (Variable h) _ ->
                                 if h == g then return True
                                 else isWlabel g ss

@@ -29,7 +29,13 @@ propS stmts =
                 VarDecl t n e -> do
                     e' <- propE e
                     case e' of
-                        Val v -> add (n,v)
+                        Val v ->
+                            case v of
+                                Var n -> do 
+                                    let assignedInFuture = concat $ map assigned ss
+                                    if elem n assignedInFuture then return ()
+                                    else add (n,v)
+                                _ -> add (n,v)
                         _ -> return ()
                     return (VarDecl t n e')
                 Assign t tg e -> do
@@ -58,6 +64,10 @@ propS stmts =
                     v' <- updatedVal v
                     return (JumpPos l v')
                 SetLabel ('_':'W':_) -> do
+                    let assignedInFuture = concat $ map assigned ss
+                    clear assignedInFuture
+                    return s
+                SetLabel ('_':'I':_) -> do
                     let assignedInFuture = concat $ map assigned ss
                     clear assignedInFuture
                     return s
