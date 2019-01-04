@@ -16,15 +16,9 @@ typedef obj (*toStringPtr)(obj);
 
 char *errMsg;
 
-int _new_counter = 0;
-int _free_counter = 0;
-int _inc_counter = 0;
-int _dec_counter = 0;
-
 uint8_t emptyString[] = "";
 
 obj __new(struct Type *t) {
-    _new_counter++;
     obj r = malloc(sizeof(struct Reference));
     r->type = t;
     r->counter = 0;
@@ -38,7 +32,6 @@ obj __new(struct Type *t) {
 }
 
 void __free(obj r) {
-    _free_counter++;
     if (r->type == &_class_Array) {
         struct Array *arr = r->data;
         void **els = arr->elements;
@@ -61,13 +54,11 @@ void __free(obj r) {
 void __incRef(obj r) {
     if (r != NULL) {
         r->counter++;
-        _inc_counter++;
     }
 }
 void __decRef(obj r) {
     if (r != NULL) {
         r->counter--;
-        _dec_counter++;
         if (r->counter <= 0) {
             if (r->type != &_class_Array) {
                 for (int i = 0; i < r->type->referenceOffsetsSize; i++)
@@ -401,13 +392,13 @@ int8_t error() {
 
 int32_t readInt() {
     int32_t i;
-    scanf("%d\n", &i);
+    int unused = scanf("%d\n", &i);
     return i;
 }
 obj readString() {
     char *line = NULL;
     size_t size = 0;
-    getline(&line, &size, stdin);
+    ssize_t unused = getline(&line, &size, stdin);
     size = u8_strlen(line);
     line[size - 1] = 0; // remove newline
     obj l = __createString(line);

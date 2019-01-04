@@ -3,6 +3,7 @@ module Main where
 
 import System.IO
 import System.Environment ( getArgs, getProgName )
+import System.Directory (removeFile)
 import System.Exit ( exitFailure, exitSuccess )
 import System.FilePath.Posix(splitExtension)
 import System.Process
@@ -35,6 +36,7 @@ import CleanupX86
 data CompilerArgs = CArgs {help :: Bool, outFile :: Maybe FilePath, printPass :: Bool, files :: [FilePath]}
 
 main = do
+    displayHeader
     cargs <- parseArgs
     if help cargs then displayHelp
     else catch (process cargs) (\(ProcessError msg) -> putStrLn msg >> exitFailure)
@@ -54,8 +56,12 @@ parseArgs = do
         walk _ _ = return (Nothing, Nothing, Nothing, [])
         stripExt = fst . splitExtension
 
+displayHeader = do
+    putStrLn "latc - Latte language compiler"
+    putStrLn "   Author: Marian Dziubiak"
+    putStrLn ""
+
 displayHelp = do
-    putStrLn "latc - Latte language compiler\n"
     putStrLn "Usage: latc [-h|--help]"
     putStrLn "       latc file.lat"
     putStrLn "       latc [-p] -o out file1.lat [file2.lat [...]]"
@@ -91,8 +97,11 @@ process args = do
             writeFile asmName (X.printX86 x2)
 
             let objName = fileName ++ ".o"
-            callProcess "nasm" ["-g", "-F dwarf", asmName, "-o", objName, "-f elf64"]
+            callProcess "nasm" [asmName, "-o", objName, "-f elf64"]
             callProcess "gcc" [objName, "runtime", "-o", fileName, "-lunistring"]
+            removeFile objName
+            
+            putStrLn "Compiled."
 
 optimizeLIR print l = prop 1 l
     where
