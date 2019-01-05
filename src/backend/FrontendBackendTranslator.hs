@@ -403,7 +403,10 @@ emitE (A.BinaryOp _ op el er) =
                         A.Mod _ -> B.Mod
                         A.And _ -> B.And
                         A.Or _ -> B.Or
-            tell [B.VarDecl ent n (B.BinOp bop (B.Var enl) (B.Var enr))]
+            if isLit el && bop /= B.Sub && bop /= B.Div && bop /= B.Mod then
+                tell [B.VarDecl ent n (B.BinOp bop (B.Var enr) (B.Var enl))]
+            else
+                tell [B.VarDecl ent n (B.BinOp bop (B.Var enl) (B.Var enr))]
             return n
     where
         compare op el er = do
@@ -428,6 +431,8 @@ emitE (A.BinaryOp _ op el er) =
                     B.SetLabel l
                   ]
             return nb
+        isLit (A.Lit _ _) = True
+        isLit _ = False
 
 emitE (A.App _ el es) = do
     ens <- mapM emitE es
