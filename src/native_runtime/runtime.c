@@ -372,6 +372,16 @@ obj intToString(int32_t i) {
     return ret;
 }
 
+obj boolToString(int8_t b) {
+    obj ret;
+    if (b)
+        ret = __createString("true");
+    else
+        ret = __createString("false");
+    __incRef(ret);
+    return ret;
+}
+
 int8_t print(obj o) {
     __incRef(o);
     obj (*toStr)(obj) = ((void **)o->type->methods)[0];
