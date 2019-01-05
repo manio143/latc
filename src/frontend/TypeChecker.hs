@@ -176,6 +176,7 @@ addBuiltInFunctions funs = builtIn ++ funs
                 Fun (name "printString") void [string],
                 Fun (name "printInt") void [int],
                 Fun (name "printBoolean") void [bool],
+                Fun (name "printBinArray") void [array byte],
                 Fun (name "boolToString") string [bool],
                 Fun (name "intToString") string [int],
                 Fun (name "print") void [object],

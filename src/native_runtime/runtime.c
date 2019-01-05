@@ -379,6 +379,15 @@ int8_t print(obj o) {
     printString(str);
     __decRef(str);
     __decRef(o);
+    return 0;
+}
+
+int8_t printBinArray(obj arr) {
+    __incRef(arr);
+    struct Array *array = arr->data;
+    fwrite(array->elements, sizeof(int8_t), array->length, stdout);
+    __decRef(arr);
+    return 0;
 }
 
 int8_t error() {

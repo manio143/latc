@@ -134,6 +134,7 @@ builtInFunctions =
         B.Fun "printInt" B.ByteT [] [],
         B.Fun "printByte" B.ByteT [] [],
         B.Fun "printBoolean" B.ByteT [] [],
+        B.Fun "printBinArray" B.ByteT [] [],
         B.Fun "boolToString" B.Reference [] [],
         B.Fun "intToString" B.Reference [] [],
         B.Fun "print" B.ByteT [] [],
