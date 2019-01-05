@@ -448,14 +448,19 @@ emitI stmts stackSize = do
                     --                 X.MOV target (X.Register rbx)
                     --                     ]
             Const c ->
-                case c of
-                    IntC i -> tell [X.MOV (X.regSizeV IntT target) (X.Constant i)]
-                    ByteC i -> tell [X.MOV (X.regSizeV ByteT target) (X.Constant i)]
-                    Null ->
-                        case target of
-                            X.Register _ ->
-                                tell [X.XOR target target]
-                            _ -> tell [X.MOV target (X.Constant 0)]
+                case target of
+                    X.Register _ -> 
+                        case c of
+                            IntC i -> tell [X.MOV (X.regSizeV IntT target) (X.Constant i)]
+                            ByteC i -> tell [X.MOV (X.regSizeV ByteT target) (X.Constant i)]
+                            Null ->tell [X.XOR target target]
+                    _ -> case c of
+                            IntC i -> tell [X.MOV (X.Register X.EBX) (X.Constant i),
+                                        X.MOV target (X.Register X.EBX)]
+                            ByteC i -> tell [X.MOV (X.Register X.BL) (X.Constant i),
+                                        X.MOV target (X.Register X.BL)]
+                            Null -> tell [X.XOR (X.Register X.RBX) (X.Register X.RBX),
+                                        X.MOV target (X.Register X.RBX)]
     emitExpr t (Call l vs) target prep@(umap,fr) =
         emitCall t (X.Label l) vs target prep
     emitExpr t (Cast l v) target prep =
