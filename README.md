@@ -1,9 +1,9 @@
 # Kompilator Latte
 
 ## Kompilacja i uruchomienie
-Potrzebna jest biblioteka `mtl` w wersji `2.2.2`, która jest na students w wersji `2.1.2`. Więc jednorazowo należy zrobić
+Potrzebna jest biblioteka `mtl` w wersji `2.2.2`, która jest na students w wersji `2.1.2`, oraz `process` w wersji conajmniej `1.2.3.0` Więc jednorazowo należy zrobić
 
-    cabal update && cabal install mtl
+    cabal update && cabal install mtl process
 
 A następnie
 
@@ -60,7 +60,7 @@ Następnie odbywa się asemblowanie do pliku `.o`, który jest następnie linkow
 Skompilowany plik można normalnie wywołać.
 
 ## Używane biblioteki
-W kompilatorze używam mtl oraz to co wygenerował BNFC.
+W kompilatorze używam mtl, process, text, bytestring oraz to co wygenerował BNFC.
 
 W runtime używam libc oraz libunistring.
 
