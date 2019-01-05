@@ -609,14 +609,12 @@ checkE (BinaryOp pos op el er) = do
         (Neq _, ClassT _ (Ident _ "String"), StringT _) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just "String")) [ner]), bool)
         (Neq _, StringT _, ClassT _ (Ident _ "String")) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just "String")) [ner]), bool)
         (Neq _, StringT _, StringT _) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just "String")) [ner]), bool)
+        (Equ _, ClassT _ (Ident _ c), ClassT _ _) -> return (App pos (Member pos nel (name "equals") (Just c)) [ner], bool)
+        (Neq _, ClassT _ (Ident _ c), ClassT _ _) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just c)) [ner]), bool)
         (op, a, b) -> 
             if a == b then
                 case a of
-                    ClassT _ (Ident _ c) -> 
-                        case op of
-                            Equ _ -> return (App pos (Member pos nel (name "equals") (Just c)) [ner], bool)
-                            Neq _ -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just c)) [ner]), bool)
-                            _ -> err
+                    ClassT _ (Ident _ c) -> err
                     ByteT _ -> 
                         case op of
                             Div _ -> checkE (BinaryOp pos op (Cast pos (IntT pos) nel) (Cast pos (IntT pos) ner))
