@@ -1,0 +1,81 @@
+class Tree {
+    boolean isNode() { return false; }
+    boolean isLeaf() { return false; }
+
+    string toString() {
+        if(isLeaf()) {
+            return "";
+        } else {
+            Node n = (Node) this;
+            return n.left.toString() + " " + n.value + " " + n.right.toString();
+        }
+    }
+}
+
+class Node extends Tree {
+    int value;
+    Tree left;
+    Tree right;
+
+    boolean isNode() { return true; }
+}
+
+class Leaf extends Tree {
+    boolean isLeaf() { return true; }
+}
+
+Tree empty() {
+    return new Leaf;
+}
+
+Tree result(int x) {
+    var n = new Node;
+    n.value = x;
+    n.left = empty();
+    n.right = empty();
+    return n;
+}
+
+Tree insert(Tree t, int x) {
+    if(t.isLeaf()) {
+        return result(x);
+    } else {
+        Node n = (Node)t;
+        if(x > n.value) {
+            var nr = insert(n.right, x);
+            var nn = new Node;
+            nn.value = n.value;
+            nn.left = n.left;
+            nn.right = nr;
+            return nn;
+        } else if (x == n.value)
+            return t;
+        else {
+            var nl = insert(n.left, x);
+            var nn = new Node;
+            nn.value = n.value;
+            nn.left = nl;
+            nn.right = n.right;
+            return nn;
+        }
+    }
+}
+
+Tree fromArray(int[] a) {
+    Tree t = empty();
+    for(var aa : a)
+        t = insert(t, aa);
+    return t;
+}
+
+int main() {
+    var a = new int[6];
+    a[0] = 5;
+    a[1] = 2;
+    a[2] = 7;
+    a[3] = -1;
+    a[4] = 6;
+    a[5] = 10;
+    print(fromArray(a));
+    return 0;
+}

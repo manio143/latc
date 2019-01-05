@@ -1,0 +1,57 @@
+void swap(int[] array, int i, int j) {
+    var t = array[i];
+    array[i] = array[j];
+    array[j] = t;
+}
+
+void sort(int[] array) {
+  quicksort(array, 0, array.length - 1);
+}
+
+void quicksort(int[] array, int left, int right) {
+    if (left < right) {
+      var pivot = array[left + ((right - left) / 2)],
+          left_new = left,
+          right_new = right;
+ 
+      var firstTime = true;
+      while (firstTime || left_new <= right_new) {
+        firstTime = false;
+        while (array[left_new] < pivot) {
+          left_new++;
+        }
+        while (pivot < array[right_new]) {
+          right_new--;
+        }
+        if (left_new <= right_new) {
+          swap(array, left_new, right_new);
+          left_new++;
+          right_new--;
+        }
+      }
+ 
+      quicksort(array, left, right_new);
+      quicksort(array, left_new, right);
+    }
+  }
+
+int main() {
+    var a = new int[30];
+    var first = true;
+    int counter = 1000000;
+    while (counter > 0) {
+      int i = 0, j = 2 * a.length;
+      for(var aa : a) {
+          a[i] = j;
+          j--;
+          i++;
+      }
+      if(first) print(a);
+      sort(a);
+      if(first) print(a);
+      first = false;
+      counter--;
+    }
+
+    return 0;
+}

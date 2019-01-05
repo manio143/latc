@@ -1,0 +1,28 @@
+// Inheritance test
+
+int main() {
+    A n = (A) null;
+    A a = new B;
+    A b = (A) new B;
+
+    B bb = (B) b;
+
+    if(a.f() == bb.f())
+        print("Test 1: Pass");
+    else
+        print("Test 2: Fail");
+
+    return 0;
+}
+
+class A {
+    int f() {
+        return 42;
+    }
+}
+
+class B extends A {
+    int f() {
+        return 5;
+    }
+}

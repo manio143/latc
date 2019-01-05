@@ -1,0 +1,21 @@
+int main() {
+    test(1);
+    printBoolean(gt(2,5));
+    printBoolean(gt(3,2));
+    return 0;
+}
+
+void test(int x) {
+    if (x > 0)
+        printString("Greater zero");
+    else
+        printString("Less then zero");
+
+    if (x < 10)
+        printString("Less 10");
+    else printString("Greater 10");
+}
+
+boolean gt(int x, int y) {
+    return x > y;
+}

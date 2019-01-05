@@ -1,0 +1,15 @@
+int main() {
+    return f(0);
+}
+
+int f(byte x) {
+    byte b = 10;
+    byte c = 250;
+    byte a = b + c;
+    printInt(a);
+    int m = 2147483645; //max int32 -2
+	int h = 7;
+	int n = m + h;
+    printInt(n);
+    return a - n;
+}

@@ -1,0 +1,77 @@
+class C {
+    int a;
+    int f(int x) {
+        var y = new int[5];
+        var t = 1000 + 1;
+        var x = y[y.length-1];
+        var b = x == 1 || x < 2 || x >= 3;
+        if(b) {
+            return 5;
+        }
+        return 42; 
+    }
+    void g() {
+        a++;
+    }
+}
+
+int main() {
+    C c = new C;
+    Object o = (Object)c;
+    printString(o.toString());
+    printString("Hello constant");
+    C c2 = (C)o;
+    c2.g();
+    printInt(c2.f(0));
+    printInt(loop());
+    printInt(lotsOfSame(1));
+    printInt(bigSum(1,2,3,4,5,6,7,8));
+    printInt(spiller(3));
+    return 0;
+}
+
+int loop() {
+    int x = 10;
+    while (x > 0)
+        x--;
+    return x; //0
+}
+
+int lotsOfSame(int x) {
+    int y = x + 2;
+    int w = 2*(2+x);
+    int z = 2 + x;
+    while(z  > 0) {
+        int p = 2 + x;
+        z--;
+    }
+    return w + z + y;
+}
+
+void deadOutOfLoop() {
+    var x = new Object;
+    int i = 5;
+    while(i > 0) {
+        x.toString();
+        i--;
+    }
+}
+
+int bigSum(int a, int b, int c, int d, int e, int f, int g, int h) {
+    return a + b + c + d + e + f + g + h;
+}
+
+int spiller(int x) {
+    int y = x + 1;
+    int c = x + 2;
+    int h = x + 7;
+    int w = x + 10;
+    int v = x + 11;
+    int z = x + 130;
+    int p = x * 2;
+    int q = x * 4;
+    int f = x * 7;
+    int g = x * 9;
+    int i = x * 13;
+    return (i+g+f+q+p+z+v+w+h+c+y+x);
+}
