@@ -27,8 +27,11 @@ Tablice dla typów `int`, `boolean` i `char` korzystają z tablicy intów/bajtó
 Klasa opisuje strukturę fragmentu pamięci obiektu oraz funkcje, które można na nim wywołać.
 
     struct Type {
+        struct Type* parent;
         int dataSize;
         void* methods;
+        int referenceOffsetsSize;
+        int* referenceOffsets;
     }
 
 Na etapie kompilacji będziemy chcieli uzyskać wywołania tego typu:
@@ -41,6 +44,8 @@ Na etapie kompilacji będziemy chcieli uzyskać wywołania tego typu:
     ((void**)r.type->methods)[0x03](r, 2);  // method invokation
 
 Kiedy dziedziczymy po pewnej klasie to nasze pola są dopisywane na końcu, podobnie nowe metody. Jeśli jest metoda o tej samej nazwie co w nadklasie (i sygnatura się zgadza) to nią zastąpimy tę metodę z nadklasy. Jak sygnatura się nie zgadza to błąd, bo Latte nie ma overloadingu metod.
+
+Struktura `Type` zawiera referencję do rodzica, co używane jest przy sprawdzaniu castowania, oraz listę pól typu referencyjnego, których licznik referencji musi zostać obniżony podczas zwalniania pamięci.
 
 ## Typy prymitywne
 

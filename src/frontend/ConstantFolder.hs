@@ -273,11 +273,14 @@ foldE (BinaryOp p op el er) = do
     checkConst _ _ _ r = return r
     foldconsts :: BinOp Position -> [Expr Position] -> [Expr Position]
     foldconsts op@(Add _) ((Lit p (String _ i)):(Lit _ (String _ j)):xs) = foldconsts op $ (Lit p (String p (i ++ j))):xs
-    foldconsts op@(Add _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i+j))):xs
-    foldconsts op@(Sub _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i-j))):xs
-    foldconsts op@(Mul _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i*j))):xs
-    foldconsts op@(Div _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i `div` j))):xs
-    foldconsts op@(Mod _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) = foldconsts op $ (Lit p (Int p (i `mod` j))):xs
+    foldconsts op@(Add _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) | boundI (i+j) = foldconsts op $ (Lit p (Int p (i+j))):xs
+    foldconsts op@(Sub _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) | boundI (i-j) = foldconsts op $ (Lit p (Int p (i-j))):xs
+    foldconsts op@(Mul _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) | boundI (i*j) = foldconsts op $ (Lit p (Int p (i*j))):xs
+    foldconsts op@(Div _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) | boundI (i `div` j) = foldconsts op $ (Lit p (Int p (i `div` j))):xs
+    foldconsts op@(Add _) ((Lit p (Byte _ i)):(Lit _ (Byte _ j)):xs) | boundB (i+j) = foldconsts op $ (Lit p (Byte p (i+j))):xs
+    foldconsts op@(Sub _) ((Lit p (Byte _ i)):(Lit _ (Byte _ j)):xs) | boundB (i-j) = foldconsts op $ (Lit p (Byte p (i-j))):xs
+    foldconsts op@(Mul _) ((Lit p (Byte _ i)):(Lit _ (Byte _ j)):xs) | boundB (i*j) = foldconsts op $ (Lit p (Byte p (i*j))):xs
+    foldconsts op@(Mod _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) | boundI (i `mod` j) = foldconsts op $ (Lit p (Int p (i `mod` j))):xs
     foldconsts op@(And _) ((Lit p (Bool _ i)):(Lit _ (Bool _ j)):xs) = foldconsts op $ (Lit p (Bool p (i && j))):xs
     foldconsts (And _) (f@(Lit _ (Bool _ True)):[]) = [f]
     foldconsts (And _) ((Lit _ (Bool _ True)):xs) = xs
@@ -286,11 +289,14 @@ foldE (BinaryOp p op el er) = do
     foldconsts (Or _) (f@(Lit _ (Bool _ True)):xs) = [f]
     foldconsts (Or _) (f@(Lit _ (Bool _ False)):[]) = [f]
     foldconsts (Or _) ((Lit _ (Bool _ False)):xs) = xs
-    foldconsts _ xs = xs
+    foldconsts op (x:xs) = x:foldconsts op xs
+    foldconsts _ [] = []
     specialExp :: Expr Position -> Expr Position
     specialExp (BinaryOp p (Div pop) (BinaryOp _ (Div _) el er) e) = (BinaryOp p (Div pop) el (BinaryOp p (Mul p) er e))
     specialExp e = e
 
+boundB x = x >= 0 && x < 256
+boundI x = x >= -(2^31) && x < 2^31
 
 sameExp e1 e2 = fmap nill e1 == fmap nill e2
 

@@ -568,10 +568,13 @@ checkE (Member pos e id _) = do
         _ -> throw ("Expected an object, given "++typeName et, pos)
     where
         cont pos e id@(Ident p i) cls@(Ident _ clsName) = do
-            mem <- getMemberType cls id
-            case mem of
-                Just t -> return (Member pos e id (Just clsName), t)
-                Nothing -> throw ("Undefined member "++i, p)
+            if clsName == "Array" && i /= "length" then
+                throw ("Undefined member "++i, p)
+            else do
+                mem <- getMemberType cls id
+                case mem of
+                    Just t -> return (Member pos e id (Just clsName), t)
+                    Nothing -> throw ("Undefined member "++i, p)
 checkE (UnaryOp pos op e) = do
     (ne, et) <- checkE e
     case (op, et) of
