@@ -2,7 +2,12 @@
 module Emit (emit) where
 
 import Data.List (nub, (\\), sort)
+import Data.Char
 import Data.Maybe (fromJust, fromMaybe, isJust)
+import Data.ByteString (unpack)
+import qualified Data.Text as T
+import Data.Text.Encoding (encodeUtf8)
+import Data.Word (Word8)
 import Control.Monad.Writer
 import Control.Monad.State
 
@@ -44,8 +49,25 @@ emitS (Struct l par s fs ms) = do
         tell $ map (\(_,_,o)-> X.DD (X.Constant o)) referenceFields
     else return ()
 
+data StringRep = Char Word8 | Str String
+
 emitString :: (Label, String) -> Writer [X.Instruction] ()
-emitString (l,s) = tell [X.SetLabel l, X.DB (X.Label (show s)), X.DB (X.Constant 0)]
+emitString (l,s) = tell $ (X.SetLabel l) : divideString s ++ [X.DB (X.Constant 0)]
+    where
+        divideString s = map toInst $ groupS s [] []
+        groupS (s:ss) lacc gacc =
+            if isAscii s && isAlphaNum s then
+                groupS ss (s:lacc) gacc
+            else
+                let ng = Str (reverse lacc) : gacc
+                    chars = reverse $ map Char $ unpack $ encodeUtf8 $ T.pack [s]
+                in groupS ss [] (chars ++ ng)
+        groupS [] [] gacc = filter empt $ reverse gacc
+        groupS [] lacc gacc = groupS [] [] (Str (reverse lacc) : gacc)
+        toInst (Str s) = X.DB (X.Label (show s))
+        toInst (Char c) = X.DB (X.Constant (fromIntegral c))
+        empt (Str "") = False
+        empt _ = True 
 
 emitF :: Function -> Writer [X.Instruction] ()
 emitF (Fun l _ args body) = do

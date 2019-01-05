@@ -72,6 +72,7 @@ int8_t printInt(int32_t i);
 int8_t printBoolean(int8_t b);
 int8_t printBinArray(obj arr);
 obj intToString(int32_t i);
+obj byteToString(uint8_t i);
 obj boolToString(int8_t b);
 int8_t print(obj o);
 int8_t error();

@@ -179,7 +179,7 @@ obj _Array_toString(obj arr) {
             strings[i] = intToString(elements[i]);
         } else if (array->elementSize == sizeof(int8_t)) {
             int8_t *elements = array->elements;
-            strings[i] = intToString(elements[i]);
+            strings[i] = byteToString(elements[i]);
         } else {
             obj *elements = array->elements;
             obj element = elements[i];
@@ -302,7 +302,7 @@ obj _String_getBytes(obj str) {
     uint8_t *rs = ((struct String *)str->data)->data;
     int32_t len = rs == NULL ? 0 : u8_strlen(rs);
     obj arr = __newByteArray(len + 1);
-    u8_strcpy(((struct Array *)str->data)->elements, rs);
+    memcpy(((struct Array *)arr->data)->elements, rs, len);
     __incRef(arr);
     return arr;
 }
@@ -376,6 +376,14 @@ obj intToString(int32_t i) {
     return ret;
 }
 
+obj byteToString(uint8_t i) {
+    char buffer[11];
+    sprintf(buffer, "%u", i);
+    obj ret = __createString(buffer);
+    __incRef(ret);
+    return ret;
+}
+
 obj boolToString(int8_t b) {
     obj ret;
     if (b)
@@ -415,7 +423,11 @@ int8_t error() {
 
 int32_t readInt() {
     int32_t i;
-    int unused = scanf("%d\n", &i);
+    char *line = NULL;
+    size_t size = 0;
+    ssize_t unused = getline(&line, &size, stdin);
+    int unused2 = sscanf(line, "%d ", &i);
+    free(line);
     return i;
 }
 obj readString() {

@@ -177,6 +177,7 @@ addBuiltInFunctions funs = builtIn ++ funs
                 Fun (name "printInt") void [int],
                 Fun (name "printBoolean") void [bool],
                 Fun (name "printBinArray") void [array byte],
+                Fun (name "byteToString") string [byte],
                 Fun (name "boolToString") string [bool],
                 Fun (name "intToString") string [int],
                 Fun (name "print") void [object],
@@ -569,7 +570,7 @@ checkE (Member pos e id _) = do
         _ -> throw ("Expected an object, given "++typeName et, pos)
     where
         cont pos e id@(Ident p i) cls@(Ident _ clsName) = do
-            if clsName == "Array" && i /= "length" then
+            if clsName == "Array" && (i == "elements" || i == "elementSize") then
                 throw ("Undefined member "++i, p)
             else do
                 mem <- getMemberType cls id
@@ -594,9 +595,10 @@ checkE (BinaryOp pos op el er) = do
         (Add _, ClassT _ (Ident _ "String"), StringT _) -> return (App pos (Member pos nel (name "concat") (Just "String")) [ner], ert)
         (Add _, StringT _, StringT _) -> return (App pos (Member pos nel (name "concat") (Just "String")) [ner], ert)
         (Add _, StringT _, ClassT _ _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Member BuiltIn ner (name "toString") Nothing) []])
+        (Add _, StringT _, ArrayT _ _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Member BuiltIn ner (name "toString") Nothing) []])
         (Add _, StringT _, BoolT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "boolToString")) [ner]])
         (Add _, StringT _, IntT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "intToString")) [ner]])
-        (Add _, StringT _, ByteT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "intToString")) [ner]])
+        (Add _, StringT _, ByteT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "byteToString")) [ner]])
         (Add _, ClassT _ (Ident _ "String"), ClassT _ _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Member BuiltIn ner (name "toString") Nothing) []])
         (Add _, ClassT _ (Ident _ "String"), BoolT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "boolToString")) [ner]])
         (Add _, ClassT _ (Ident _ "String"), IntT _) -> checkE (App pos (Member pos nel (name "concat") (Just "String")) [App pos (Var BuiltIn (name "intToString")) [ner]])

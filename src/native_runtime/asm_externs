@@ -28,7 +28,10 @@ extern printString
 extern printInt
 extern printBoolean
 extern intToString
+extern byteToString
+extern boolToString
 extern print
+extern printBinArray
 extern error
 extern readInt
 extern readString

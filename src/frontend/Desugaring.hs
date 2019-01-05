@@ -3,6 +3,8 @@ module Desugaring where
 -- This module converts the AST from bnfc
 -- to my custom AST
 
+import Data.Char
+
 import qualified AbsLatte as A
 import qualified ProgramStructure as B
 
@@ -82,6 +84,19 @@ desugarE (A.EString a str) = B.Lit a (B.String a (delim $ trim str))
         delim ('\\':'\"':xs) = '\"' : delim xs
         delim ('\\':'\'':xs) = '\'' : delim xs
         delim ('\\':'\\':xs) = '\\' : delim xs
+        delim ('\\':xs) = let (num, rest) = readNum xs in chr num : delim rest
+            where
+                readNum ss = 
+                    let s = takeF isDigit ss []
+                        i = read s :: Int
+                        l = length s
+                        ns = drop l ss
+                    in case ns of
+                        ('\\':'&':r) -> (i,r)
+                        _ -> (i,ns)
+                takeF f (s:ss) acc | f s = takeF f ss (s:acc)
+                takeF _ _ acc = reverse acc
+
         delim (x:xs) = x : delim xs
         delim [] = []
 desugarE (A.Neg a e) = B.UnaryOp a (B.Neg a) (desugarE e)

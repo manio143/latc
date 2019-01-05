@@ -84,6 +84,7 @@ Do dyspozycji oddaję następujące funkcje:
 - void print(Object)  - wywołuje `.toString()` i woła printString
 - string boolToString(boolean)
 - string intToString(int)
+- string byteToString(byte)
 - void error()
 - int readInt()
 - string readString()
