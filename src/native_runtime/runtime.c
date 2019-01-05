@@ -155,7 +155,11 @@ obj __createString(char *c) {
 }
 
 // BuiltIn classes' methods
-obj _Object_toString(obj o) { return __createString("Object"); }
+obj _Object_toString(obj o) {
+    obj ret = __createString("Object");
+    __incRef(ret);
+    return ret;
+}
 int32_t _Object_getHashCode(obj o) { return (int32_t)(int64_t)o; }
 int8_t _Object_equals(obj o1, obj o2) { return o1 == o2; }
 
