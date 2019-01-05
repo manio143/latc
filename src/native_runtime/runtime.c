@@ -144,10 +144,11 @@ obj __createString(char *c) {
     str->length = 0;
     uint8_t *walker = str->data;
     while (walker != NULL) {
-        str->length++;
         ucs4_t c;
-        if (u8_next(&c, walker) != NULL)
+        if (u8_next(&c, walker) != NULL) {
             walker += u8_next(&c, walker) - walker;
+            str->length++;
+        }
         else
             walker = NULL;
     }
