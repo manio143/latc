@@ -4,6 +4,7 @@ module FrontendBackendTranslator (translate) where
 
 import Data.List ((\\), findIndex)
 import Data.Maybe (fromJust)
+import Data.Functor ((<$>))
 import Control.Monad.State
 import Control.Monad.Writer
 

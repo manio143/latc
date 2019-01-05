@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 module ScopeRenamer (renameScopedVars) where
 
+import Data.Functor ((<$>))
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State

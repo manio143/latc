@@ -8,6 +8,7 @@ import Data.ByteString (unpack)
 import qualified Data.Text as T
 import Data.Text.Encoding (encodeUtf8)
 import Data.Word (Word8)
+import Data.Functor ((<$>))
 import Control.Monad.Writer
 import Control.Monad.State
 

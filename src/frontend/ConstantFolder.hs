@@ -1,9 +1,11 @@
 module ConstantFolder (foldConstants) where
 
 import Data.List (sort)
-import Control.Monad.Except
-import Control.Monad.Reader
-import Control.Monad.State
+import Prelude hiding (mapM)
+import Data.Traversable (mapM)
+import Control.Monad.Except hiding (mapM)
+import Control.Monad.Reader hiding (mapM)
+import Control.Monad.State hiding (mapM)
 
 import Debug.Trace
 
