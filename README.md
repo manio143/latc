@@ -12,6 +12,22 @@ A następnie
 
 Kompilator pozwala na połączenie wielu plików źródłowych, ustawienie nazwy programu wynikowego (`-o out`) oraz wypisanie poszczególnych kroków kompilacji (`-p`).
 
+## Zakres
+Kompiluję to x86_64.
+
+Robione przeze mnie rozszerzenia to
+
+- tablice
+- klasy z dziedziczeniem
+- metody wirtualne
+- odśmiecanie
+
+Dodatkowo
+
+- słowo kluczowe `var` służące do inferencji typu zmiennej podczas jej deklaracji z wartością
+- typ bazowy `Object`, po którym dziedziczą wszystkie typy poza primitywnymi
+- typy primitywne to `int`, `bool` i `byte`
+
 ## Frontend
 
 - parser
@@ -23,18 +39,6 @@ Kompilator pozwala na połączenie wielu plików źródłowych, ustawienie nazwy
 - scope renamer
 
 Przy czym sprawdzanie redeklaracji zawiera się w module `TypeChecker`.
-
-Robione przeze mnie rozszerzenia to
-
-- tablice
-- klasy z dziedziczeniem
-- metody wirtualne
-
-Dodatkowo
-
-- słowo kluczowe `var` służące do inferencji typu zmiennej podczas jej deklaracji z wartością
-- typ bazowy `Object`, po którym dziedziczą wszystkie typy poza primitywnymi
-- typy primitywne to `int`, `bool` i `byte`
 
 ### Krok po kroku
 Wygenerowałem parser na podstawie gramatyki BNFC (plik `src/parser/Latte.cf`). Po sparsowaniu pliku, zostaje on poddany procesowi odsładzania (desugaring) w wyniku którego otrzymuję moją własną strukturę AST.
@@ -65,3 +69,48 @@ Tuż przed kompilacją czyszczę nieco wyemitowany kod, usuwając niepotrzebne k
 Następnie odbywa się asemblowanie do pliku `.o`, który jest następnie linkowany z przygotowanym runtimem (`src/native_runtime`).
 
 Skompilowany plik można normalnie wywołać.
+
+## Używane biblioteki
+W kompilatorze używam mtl oraz to co wygenerował BNFC.
+
+W runtime używam libc oraz libunistring.
+
+## Standardowa biblioteka Latte
+Do dyspozycji oddaję następujące funkcje:
+
+- void printString(string)
+- void printInt(int)
+- void printBoolean(boolean)
+- void print(Object)  - wywołuje `.toString()` i woła printString
+- string boolToString(boolean)
+- string intToString(int)
+- void error()
+- int readInt()
+- string readString()
+
+Oraz następujące klasy
+
+    class Object {
+        boolean equals(Object other);
+        int getHashCode();
+        string toString();
+    }
+
+    class Array extends Object {
+        int length;
+        string toString();
+    }
+
+    class String extends Object {
+        int charAt(int pos);
+        boolean equals(Object other);
+        string concat(string other);
+        boolean startsWith(string substr);
+        boolean endsWith(string substr);
+        byte[] getBytes();
+        int indexOf(string substr, int startIndex);
+        int length();
+        string substring(int index, int length);
+        string toString();
+        int getHashCode();
+    }

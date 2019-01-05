@@ -36,7 +36,6 @@ import CleanupX86
 data CompilerArgs = CArgs {help :: Bool, outFile :: Maybe FilePath, printPass :: Bool, files :: [FilePath]}
 
 main = do
-    displayHeader
     cargs <- parseArgs
     if help cargs then displayHelp
     else catch (process cargs) (\(ProcessError msg) -> putStrLn msg >> exitFailure)
@@ -101,7 +100,7 @@ process args = do
             callProcess "gcc" [objName, "runtime", "-o", fileName, "-lunistring"]
             removeFile objName
             
-            putStrLn "Compiled."
+            putStrLn "OK"
 
 optimizeLIR print l = prop 1 l
     where
@@ -144,7 +143,7 @@ parseFile file = do
         Left (msg,(l,c)) -> do
             let line = (if l >= 0 then last . take l else last) $ lines f
             let arrow = (replicate ((if c >= 0 then c-1 else length line)) ' ') ++ "^"
-            throwIO $ ProcessError $ "Parsing error occured.\n" ++ msg ++ "\n\t" ++ line ++ "\n\t" ++ arrow
+            throwIO $ ProcessError $ "ERROR\n" ++ msg ++ "\n\t" ++ line ++ "\n\t" ++ arrow
         Right ast -> return $ fmap ((\(Just (l,c)) -> S.Position file l c)) ast
 
 concatAST = Program S.Undefined . concat . map (\(Program a tds) -> tds) 
@@ -158,8 +157,8 @@ reportError (msg, position) = do
             f <- readFile file
             let line = (if l >= 0 then last . take l else last) $ lines f
             let arrow = (replicate ((if c >= 0 then c-1 else length line)) ' ') ++ "^"
-            throwIO $ ProcessError $ "Error occured.\n" ++ msg ++ "\nat "++show p ++"\n\n\t" ++ line ++ "\n\t" ++ arrow
-        _ -> throwIO $ ProcessError $ "Error occured.\n" ++ msg
+            throwIO $ ProcessError $ "ERROR\n" ++ msg ++ "\nat "++show p ++"\n\n\t" ++ line ++ "\n\t" ++ arrow
+        _ -> throwIO $ ProcessError $ "ERROR\n" ++ msg
 
 liftExcept :: (Monad m) => Except e a -> ExceptT e m a
 liftExcept m = case runExcept m of
