@@ -13,9 +13,9 @@ A następnie
 Kompilator pozwala na połączenie wielu plików źródłowych, ustawienie nazwy programu wynikowego (`-o out`) oraz wypisanie poszczególnych kroków kompilacji (`-p`).
 
 ## Zakres
-Kompiluję to x86_64.
+Kompiluję do kodu maszynowego x86_64.
 
-Robione przeze mnie rozszerzenia to
+Zrobione przeze mnie rozszerzenia to
 
 - tablice
 - klasy z dziedziczeniem
@@ -27,27 +27,16 @@ Dodatkowo
 - słowo kluczowe `var` służące do inferencji typu zmiennej podczas jej deklaracji z wartością
 - typ bazowy `Object`, po którym dziedziczą wszystkie typy poza primitywnymi
 - typy primitywne to `int`, `bool` i `byte`
+- dopuszczam oprację `+`, gdzie po lewej stronie jest string, a po prawej cokolwiek, co spowoduje przerobienie prawej strony na odpowiedni string
 
 ## Frontend
-
-- parser
-- desugaring
-- redeclaration checker
-- type checker
-- constant folder
-- return checker
-- scope renamer
-
-Przy czym sprawdzanie redeklaracji zawiera się w module `TypeChecker`.
-
-### Krok po kroku
 Wygenerowałem parser na podstawie gramatyki BNFC (plik `src/parser/Latte.cf`). Po sparsowaniu pliku, zostaje on poddany procesowi odsładzania (desugaring) w wyniku którego otrzymuję moją własną strukturę AST.
 
 Następnie na tej strukturze przeprowadzane jest sprawdzanie typów i redeklaracji klas/funkcji. Jego wynikiem jest zaktualizowane AST (m.in. odwołania do pól i metod dostają explicite `this.`, wszelkie występowania `var` są zastępowane właściwym typem).
 
 Następnie dochodzi do propagacji stałych oraz składanie stałych wyrażeń (w zakresie danego typu).
 
-Kolejnym krokiem jest przejście się po funkcjach i metodach oraz sprawdzenie czy dla funkcji typu innego niż `void` jest zwracana jakaś wartość na każdej ścieżce egzekucji (w dość prosty sposób, bez uproszczania wyrażeń w warunkach).
+Kolejnym krokiem jest przejście się po funkcjach i metodach oraz sprawdzenie czy dla funkcji typu innego niż `void` jest zwracana jakaś wartość na każdej ścieżce egzekucji.
 
 Ostatnim elementem po stronie drzewa AST jest zmiana nazw wszystkich zmiennych dodając im informację o zagnieżdżeniu.
 
@@ -78,16 +67,16 @@ W runtime używam libc oraz libunistring.
 ## Standardowa biblioteka Latte
 Do dyspozycji oddaję następujące funkcje:
 
-- void printString(string)
-- void printInt(int)
-- void printBoolean(boolean)
-- void print(Object)  - wywołuje `.toString()` i woła printString
-- string boolToString(boolean)
-- string intToString(int)
-- string byteToString(byte)
-- void error()
-- int readInt()
-- string readString()
+- `void printString(string)`
+- `void printInt(int)`
+- `void printBoolean(boolean)`
+- `void print(Object)`  - wywołuje `.toString()` i woła printString
+- `string boolToString(boolean)`
+- `string intToString(int)`
+- `string byteToString(byte)`
+- `void error()`
+- `int readInt()`
+- `string readString()`
 
 Oraz następujące klasy
 
