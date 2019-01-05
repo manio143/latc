@@ -8,15 +8,19 @@ Potrzebna jest biblioteka `mtl` w wersji `2.2.2`, która jest na students w wers
 A następnie
 
     make
-    ./latc_frontend file.lat
+    ./latc_x86_64 file.lat
+
+Kompilator pozwala na połączenie wielu plików źródłowych, ustawienie nazwy programu wynikowego (`-o out`) oraz wypisanie poszczególnych kroków kompilacji (`-p`).
 
 ## Frontend
-Na chwilę obecną mam zrobione:
 
 - parser
+- desugaring
 - redeclaration checker
 - type checker
+- constant folder
 - return checker
+- scope renamer
 
 Przy czym sprawdzanie redeklaracji zawiera się w module `TypeChecker`.
 
@@ -37,6 +41,27 @@ Wygenerowałem parser na podstawie gramatyki BNFC (plik `src/parser/Latte.cf`). 
 
 Następnie na tej strukturze przeprowadzane jest sprawdzanie typów i redeklaracji klas/funkcji. Jego wynikiem jest zaktualizowane AST (m.in. odwołania do pól i metod dostają explicite `this.`, wszelkie występowania `var` są zastępowane właściwym typem).
 
+Następnie dochodzi do propagacji stałych oraz składanie stałych wyrażeń (w zakresie danego typu).
+
 Kolejnym krokiem jest przejście się po funkcjach i metodach oraz sprawdzenie czy dla funkcji typu innego niż `void` jest zwracana jakaś wartość na każdej ścieżce egzekucji (w dość prosty sposób, bez uproszczania wyrażeń w warunkach).
 
-No i na tę chwilę na koniec wypisywany jest sprawdzony kod na standardowe wyjście.
+Ostatnim elementem po stronie drzewa AST jest zmiana nazw wszystkich zmiennych dodając im informację o zagnieżdżeniu.
+
+## Backend
+Kiedy przerobiłem już drzewo AST, to konwertuję je do liniowej reprezentacji (LIR), gdzie wyrażenia rozbijane są na pojedyncze przypisania, a pętle, warunki i porównania są zamieniane na skoki i etykiety.
+
+Ponieważ translacja jest bardzo nieoptymalna, to następnym krokiem jest propagacja wartości, która wycina niepotrzebne wyrażenia.
+
+Następnie eliminuję identyczne wyrażenia w ramach bloku.
+
+Używam systemu liczenia referencji do zarządzania pamięcią obiektów. Na podstawie analizy żywotności dodaję wywołania funkcji `__incRef` i `__decRef`.
+
+Następnie alokuję rejestry i miejsce na stosie - w sposób liniowy, zapisując żywe zmienne na stosie na koniec bloku.
+
+Mając te informacje emituję assembler x86_64 do postaci rozumianej przez NASM.
+
+Tuż przed kompilacją czyszczę nieco wyemitowany kod, usuwając niepotrzebne komendy lub upraszczając sekwencje.
+
+Następnie odbywa się asemblowanie do pliku `.o`, który jest następnie linkowany z przygotowanym runtimem (`src/native_runtime`).
+
+Skompilowany plik można normalnie wywołać.
