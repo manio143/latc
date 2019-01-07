@@ -384,6 +384,8 @@ emitE (A.UnaryOp _ op e) = do
             n <- lift $ newName ent
             tell [B.VarDecl ent n (B.Not (B.Var en))]
             return n
+emitE (A.BinaryOp p (A.Add p2) (A.UnaryOp _ (A.Neg _) el) er) = emitE (A.BinaryOp p (A.Sub p2) er el)
+emitE (A.BinaryOp p (A.Add p2) el (A.UnaryOp _ (A.Neg _) er)) = emitE (A.BinaryOp p (A.Sub p2) el er)
 emitE (A.BinaryOp _ op el er) = 
     case op of
         A.Lt _ -> compare op el er

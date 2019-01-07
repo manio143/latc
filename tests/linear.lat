@@ -27,7 +27,15 @@ int main() {
     printInt(lotsOfSame(1));
     printInt(bigSum(1,2,3,4,5,6,7,8));
     printInt(spiller(3));
+    negTest(3);
     return 0;
+}
+
+void negTest(int x) {
+    printInt(x - 10);
+    printInt(10 - x);
+    printInt(-x - 10);
+    printInt(-10 - x);
 }
 
 int loop() {
