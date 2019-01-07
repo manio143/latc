@@ -144,6 +144,7 @@ instance Functor Type where
     fmap f (StringT a) = StringT (f a)
     fmap f (IntT a) = IntT (f a)
     fmap f (ByteT a) = ByteT (f a)
+    fmap f (InfferedT a) = InfferedT (f a)
     fmap f (ClassT a id) = ClassT (f a) (fmap f id)
     fmap f (ArrayT a t) = ArrayT (f a) (fmap f t)
     fmap f (FunT a t ts) = FunT (f a) (fmap f t) (fmap (fmap f) ts)

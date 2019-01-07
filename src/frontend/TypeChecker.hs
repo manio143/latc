@@ -482,7 +482,7 @@ checkE (Lit pos l@(Int _ i)) =
 checkE (Lit pos l@(String _ _)) = return (Lit pos l, StringT pos)
 checkE (Lit pos l@(Bool _ _)) = return (Lit pos l, BoolT pos)
 checkE (Lit pos l@(Byte _ _)) = return (Lit pos l, ByteT pos)
-checkE (Lit pos l@(Null _)) = return (Lit pos l, InfferedT pos)
+checkE (Lit pos l@(Null _)) = return (Lit pos l, ClassT pos (name "Object"))
 checkE (Var pos id) = do
     mv <- getVar id
     case mv of
@@ -534,7 +534,11 @@ checkE (Cast pos t e) = do
         _ -> do
             (ne, et) <- checkE e
             c <- canBeCastDown et t
-            if c then return (Cast pos t ne, t)
+            if c then 
+                case ne of
+                    (Cast _ _ ie) -> return (Cast pos t ie, t)
+                    (Lit _ (Null _)) -> return (ne, t)
+                    _ -> return (Cast pos t ne, t)
             else throw ("Illegal cast of "++typeName et++" to "++typeName t, pos)
 checkE (ArrAccess pos earr ein _) = do
     (nearr, art) <- checkE earr
@@ -611,6 +615,10 @@ checkE (BinaryOp pos op el er) = do
         (Neq _, StringT _, StringT _) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just "String")) [ner]), bool)
         (Equ _, ClassT _ (Ident _ c), ClassT _ _) -> return (App pos (Member pos nel (name "equals") (Just c)) [ner], bool)
         (Neq _, ClassT _ (Ident _ c), ClassT _ _) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just c)) [ner]), bool)
+        (Equ _, ClassT _ (Ident _ c), StringT _) -> return (App pos (Member pos nel (name "equals") (Just c)) [ner], bool)
+        (Neq _, ClassT _ (Ident _ c), StringT _) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just c)) [ner]), bool)
+        (Equ _, StringT _, ClassT _ _) -> return (App pos (Member pos nel (name "equals") (Just "String")) [ner], bool)
+        (Neq _, StringT _, ClassT _ _) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just "String")) [ner]), bool)
         (op, a, b) -> 
             if a == b then
                 case a of

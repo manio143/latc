@@ -1,0 +1,17 @@
+int main() {
+    f(null);
+    return 0;
+}
+
+void f(Object x) {
+    if(x == null) {
+        print("RHS Passed");
+    }
+    if(null == x) {
+        print("LHS Passed");
+    }
+    // Had to do a hack here
+    if((null).equals(null) || null == null) {
+        print("WTF?");
+    }
+}

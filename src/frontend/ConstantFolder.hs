@@ -185,6 +185,9 @@ assignedForeign _ = []
 
 foldE :: Expr Position -> OuterMonad (Expr Position)
 foldE l@(Lit _ _) = return l
+foldE (App p (Member _ (Lit _ (Null _)) (Ident _ "equals") mt) [(Lit _ (Null _))]) = return $ Lit p (Bool p True)
+foldE (App p (Member p4 (Lit p2 (Null p3)) (Ident p5 "equals") mt) [es]) =
+    foldE (App p (Member p4 es (Ident p5 "equals") mt) [Lit p2 (Null p3)])
 foldE (App p el es) = do
     nel <- foldE el
     checkNull nel p
