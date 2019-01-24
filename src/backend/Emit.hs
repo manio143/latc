@@ -153,8 +153,8 @@ allocateRegisters sst args regMap =
                 if take 2 l /= "_C" then spill (tin \\ [n]) else return ()
             JumpCmp cmp l vl vr -> do
                 let vars = (case vl of {(Var n)->[n];_->[]} ++ case vr of {(Var n)->[n];_->[]})
+                if take 2 l /= "_C" then spill tin else return ()
                 assertInRegs vars
-                if take 2 l /= "_C" then spill (tin \\ vars) else return ()
             SetLabel l -> if take 2 l /= "_C" then spill tin else return ()
             _ -> return ()
         prep <- getst
@@ -445,6 +445,7 @@ emitI stmts stackSize = do
         spillAndLoad prep after
     emitStmt ((JumpCmp cmp l vl vr), before, prep@(umap,_), after) = do
         spillAndLoad before prep
+        storeToMem prep
         let vlc = valueConv umap vl
         let vrc = valueConv umap vr
         tell [X.CMP vlc vrc, makeJump cmp l]
