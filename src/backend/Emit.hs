@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts #-}
 module Emit (emit) where
 
 import Data.List (nub, (\\), sort)
@@ -13,7 +13,6 @@ import Control.Monad.Writer
 import Control.Monad.State
 
 import Debug.Trace
-import Debug.Trace.LocationTH
 
 import qualified Assembly as X
 import ValuePropagation

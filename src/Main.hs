@@ -98,7 +98,7 @@ process args = do
 
             let objName = fileName ++ ".o"
             callProcess "nasm" [asmName, "-o", objName, "-f elf64"]
-            callProcess "gcc" [objName, "runtime", "-o", fileName, "-lunistring"]
+            callProcess "gcc" [objName, "lib/runtime", "-o", fileName, "-lunistring"]
             removeFile objName
             
             putStrLn "OK"

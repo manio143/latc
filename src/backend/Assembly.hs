@@ -79,7 +79,7 @@ instance Show Value where
                         else ""
         in "["++show r++m++o++"]"
 
-printX86 (Program is) = "%include 'runtime.ext'\n" ++ (concat $ map p is)
+printX86 (Program is) = "%include 'lib/runtime.ext'\n" ++ (concat $ map p is)
   where
     p i = pp i ++ "\n"
     pp (SetLabel l) = l++":"
