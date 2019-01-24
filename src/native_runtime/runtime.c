@@ -141,17 +141,7 @@ obj __createString(char *c) {
         str->data = emptyString;
         return r;
     }
-    str->length = 0;
-    uint8_t *walker = str->data;
-    while (walker != NULL) {
-        ucs4_t c;
-        if (u8_next(&c, walker) != NULL) {
-            walker += u8_next(&c, walker) - walker;
-            str->length++;
-        }
-        else
-            walker = NULL;
-    }
+    str->length = -1;
     return r;
 }
 
@@ -234,8 +224,7 @@ int32_t _String_getHashCode(obj str) {
 int8_t _String_equals(obj o1, obj o2) {
     if (o2->type != &_class_String)
         return false;
-    if (((struct String *)o1->data)->length !=
-        ((struct String *)o2->data)->length)
+    if (_String_length(o1) != _String_length(o2))
         return false;
     uint8_t *rs1 = ((struct String *)o1->data)->data;
     uint8_t *rs2 = ((struct String *)o2->data)->data;
@@ -276,7 +265,13 @@ obj _String_substring(obj str, int32_t startIndex, int32_t length) {
     free(buffer);
     return ret;
 }
-int32_t _String_length(obj str) { return ((struct String *)str->data)->length; }
+int32_t _String_length(obj str) {
+    struct String *string = str->data;
+    if (string->length < 0) {
+        string->length = u8_mbsnlen(string->data, u8_strlen(string->data));
+    }
+    return string->length;
+}
 int32_t _String_indexOf(obj str, obj substr, int32_t startFrom) {
     if (startFrom >= _String_length(str)) {
         errMsg = "ERROR: IndexOf starting index is too big.";
