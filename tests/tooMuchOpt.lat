@@ -1,0 +1,9 @@
+int main() {
+    boolean b = (false || prin()) && false;
+    return 0;
+}
+
+boolean prin() {
+    printString("ahoj");
+    return true;
+}

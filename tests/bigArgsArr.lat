@@ -1,0 +1,15 @@
+int main() {
+    int[] a = new int[1];
+    bigSum(a,1,2,3,4,5,6,7,8,9,10);
+    return a[0];
+}
+
+int bigSum(int[] arr, int a, int b, int c, int d, int e, int f, int g, int h, int i, int j) {
+    if(a < 1)
+        return 5;
+    else
+        {
+            arr[0] = bigSum(arr,0,b,c,d,e,f,g,h,i,j);
+            return 0;
+        }
+}

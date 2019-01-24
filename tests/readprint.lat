@@ -1,0 +1,11 @@
+int main() {
+    int a = readInt();
+    int b, c;
+
+    b = a + 3;
+    c = a + 3;
+
+    printInt(b);
+    printInt(c);
+    return 0;
+}
