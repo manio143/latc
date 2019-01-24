@@ -44,10 +44,10 @@ stackOptim xs = let xs' = opt xs in if xs == xs' then xs else stackOptim xs'
         opt (i:is) = i : opt is
         opt [] = []
 
-notDependent (Register r) (Memory r' _ _) | r == r' = False
-notDependent (Register r) (Memory _ (Just (r', _)) _) | r == r' = False
-notDependent (Memory r' _ _) (Register r) | r == r' = False
-notDependent (Memory _ (Just (r',_)) _) (Register r) | r == r' = False
+notDependent (Register r) (Memory r' _ _ _) | r == r' = False
+notDependent (Register r) (Memory _ (Just (r', _)) _ _) | r == r' = False
+notDependent (Memory r' _ _ _) (Register r) | r == r' = False
+notDependent (Memory _ (Just (r',_)) _ _) (Register r) | r == r' = False
 notDependent _ _ = True
 
 isTemp (Register x) = topReg x == RBX

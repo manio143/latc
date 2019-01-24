@@ -216,8 +216,6 @@ checkD (FunctionDef pos tret id args b) = do
     checkTypeExists AllowVoid tret
     mapM (lift . typeFromArg) args >>= mapM_ (checkTypeExists NoVoid)
     checkArgsRedeclaration args
-    if length args > 9 then throw ("Function has too many parameters, consider creating an object", pos)
-    else return ()
     checkedBody <- local (funEnv tret args) (checkB b)
     return $ FunctionDef pos tret id args checkedBody
 checkD (ClassDef pos id parent decls) = do
@@ -243,8 +241,6 @@ checkM (MethodDecl pos tret id args b) = do
     checkTypeExists AllowVoid tret
     mapM (lift . typeFromArg) args >>= mapM_ (checkTypeExists NoVoid)
     checkArgsRedeclaration args
-    if length args > 8 then throw ("Method has too many parameters, consider creating an object", pos)
-    else return ()
     checkedBody <- local (funEnv tret args) (checkB b)
     return $ MethodDecl pos tret id args checkedBody
 
@@ -521,10 +517,15 @@ checkE (Var pos id) = do
 checkE (App pos efun es) = do
     (nef, eft) <- checkE efun
     case eft of
-        FunT _ ret _ -> do
+        FunT _ ret args -> do
             nes <- mapM checkE es
             let efts = map snd nes
-            checkCastUp pos (FunT pos (InfferedT pos) efts) eft
+            if length efts > length args then
+                throw ("Too many arguments", pos)
+            else if length efts < length args then
+                throw ("Too few arguments", pos)
+            else return ()
+            mapM_ (\(l,(e,r)) -> checkCastUp (getPosE e) r l) $ zip args nes
             return (App pos nef (map fst nes), ret)
         _ -> throw ("Expected a function or a method, given"++typeName eft, pos)
 checkE (Cast pos t e) = do
@@ -623,6 +624,7 @@ checkE (BinaryOp pos op el er) = do
             if a == b then
                 case a of
                     ClassT _ (Ident _ c) -> err
+                    VoidT _ -> err
                     ByteT _ -> 
                         case op of
                             Div _ -> checkE (BinaryOp pos op (Cast pos (IntT pos) nel) (Cast pos (IntT pos) ner))

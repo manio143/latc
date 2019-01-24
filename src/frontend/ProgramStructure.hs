@@ -287,3 +287,13 @@ isAA _ = False
 
 isCond (BinaryOp _ op _ _) = isBB op || isAA op
 isCond _ = False
+
+getPosE (Var a id) = a
+getPosE (Lit a l) = a
+getPosE (App a e es) = a
+getPosE (UnaryOp a o e) = a
+getPosE (BinaryOp a o e1 e2) = a
+getPosE (Member a e id m) = a
+getPosE (NewObj a t m) = a
+getPosE (ArrAccess a el er m) = a
+getPosE (Cast a t e) = a

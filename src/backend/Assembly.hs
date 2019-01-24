@@ -8,7 +8,7 @@ data Program = Program [Instruction]
 data Value = Constant Integer 
            | Label String 
            | Register Reg 
-           | Memory Reg (Maybe (Reg, Integer)) (Maybe Integer)
+           | Memory Reg (Maybe (Reg, Integer)) (Maybe Integer) (Maybe Type)
             --[r1 + r2*c1 + c2]
     deriving (Eq,Ord)
 
@@ -69,7 +69,7 @@ instance Show Value where
     show (Constant i) = show i
     show (Label s) = s
     show (Register r) = show r
-    show (Memory r mm mo) =
+    show (Memory r mm mo _) =
         let m = case mm of {Nothing -> ""; Just (r,i) -> " + "++show r ++ "*"++show i}
             o = case mo of 
                     Nothing -> ""
@@ -100,7 +100,7 @@ printX86 (Program is) = "%include 'runtime.ext'\n" ++ (concat $ map p is)
 isReg (Register _) = True
 isReg _ = False
 
-isMem (Memory _ _ _) = True
+isMem (Memory _ _ _ _) = True
 isMem _ = False
 
 topReg AL  = RAX
@@ -180,6 +180,11 @@ regSize t r = regSize t (topReg r)
 
 regSizeV t (Register r) = Register (regSize t r)
 regSizeV _ v = v
+
+topRegV (Register r) = Register (topReg r)
+topRegV v = v
+
+regSizeRV (Register r) = regSizeR r
 
 regSizeR EAX = IntT
 regSizeR EBX = IntT
