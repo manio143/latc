@@ -248,10 +248,11 @@ foldE (BinaryOp p op el er) = do
         Ge _ -> checkConst (\c -> c == GT || c == EQ) nel ner (BinaryOp p op nel ner)
         Lt _ -> checkConst (== LT) nel ner (BinaryOp p op nel ner)
         Le _ -> checkConst (\c -> c == LT || c == EQ) nel ner (BinaryOp p op nel ner)
+
         _ -> do
             let lin = linearize (BinaryOp p op nel ner)
                 nop = fmap nill op
-            if nop == Div () || nop == Mod () || nop == Sub () then do
+            if nop == Div () || nop == Mod () || nop == Sub () || nop == And () || nop == Or () then do
                 let fslin = foldconsts op lin
                     foldBack = foldl1 (BinaryOp p op) fslin
                 return foldBack
@@ -288,12 +289,12 @@ foldE (BinaryOp p op el er) = do
     foldconsts op@(Mod _) ((Lit p (Int _ i)):(Lit _ (Int _ j)):xs) | boundI (i `mod` j) = foldconsts op $ (Lit p (Int p (i `mod` j))):xs
     foldconsts op@(And _) ((Lit p (Bool _ i)):(Lit _ (Bool _ j)):xs) = foldconsts op $ (Lit p (Bool p (i && j))):xs
     foldconsts (And _) (f@(Lit _ (Bool _ True)):[]) = [f]
-    foldconsts (And _) ((Lit _ (Bool _ True)):xs) = xs
+    foldconsts op@(And _) ((Lit _ (Bool _ True)):xs) = foldconsts op xs
     foldconsts (And _) (f@(Lit _ (Bool _ False)):xs) = [f]
     foldconsts op@(Or _) ((Lit p (Bool _ i)):(Lit _ (Bool _ j)):xs) = foldconsts op $ (Lit p (Bool p (i || j))):xs
     foldconsts (Or _) (f@(Lit _ (Bool _ True)):xs) = [f]
     foldconsts (Or _) (f@(Lit _ (Bool _ False)):[]) = [f]
-    foldconsts (Or _) ((Lit _ (Bool _ False)):xs) = xs
+    foldconsts op@(Or _) ((Lit _ (Bool _ False)):xs) = foldconsts op xs
     foldconsts op (x:xs) = x:foldconsts op xs
     foldconsts _ [] = []
     specialExp :: Expr Position -> Expr Position
