@@ -30,6 +30,7 @@ findSucc ind (s,i) =
         JumpNotZero l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
         JumpNeg l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
         JumpPos l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
+        JumpCmp _ l _ _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
         ReturnVal _ _ -> (s,i,[])
         Return -> (s,i,[])
         _ -> (s,i,[i+1])

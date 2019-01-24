@@ -35,7 +35,11 @@ data Stmt = VarDecl Type Name Expr
           | JumpNotZero Label Value
           | JumpNeg Label Value
           | JumpPos Label Value
+          | JumpCmp Cmp Label Value Value
           deriving (Eq, Ord, Show)
+
+data Cmp = Eq | Ne | Le | Lt | Ge | Gt
+    deriving (Eq, Ord, Show)
 
 data Target = Variable Name | Array Name Value | Member Name Offset
     deriving (Eq, Ord, Show)
@@ -76,10 +80,11 @@ linShowStmt (ReturnVal t e) = "    return "++linShowExp e
 linShowStmt (Return) = "    return"
 linShowStmt (SetLabel l) = "  "++l++":"
 linShowStmt (Jump l) = "    jump "++l
-linShowStmt (JumpZero l v) = "    jump "++show l++" if "++show v ++" == 0"
-linShowStmt (JumpNotZero l v) = "    jump "++show l++" if "++show v ++" != 0"
+linShowStmt (JumpZero l v) = "    jump "++show l++" if "++show v ++" == 0 (false)"
+linShowStmt (JumpNotZero l v) = "    jump "++show l++" if "++show v ++" != 0 (true)"
 linShowStmt (JumpNeg l v) = "    jump "++show l++" if "++show v ++" < 0"
 linShowStmt (JumpPos l v) = "    jump "++show l++" if "++show v ++" > 0"
+linShowStmt (JumpCmp cmp l vl vr) = "    jump "++show l++" if "++show vl++" "++show cmp++" "++show vr
 
 linShowExp (Val v) = show v
 linShowExp (MemberAccess n o) = n++".field["++show o++"]"

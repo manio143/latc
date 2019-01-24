@@ -63,6 +63,10 @@ propS stmts =
                 JumpPos l v -> do
                     v' <- updatedVal v
                     return (JumpPos l v')
+                JumpCmp cmp l vl vr -> do
+                    vl' <- updatedVal vl
+                    vr' <- updatedVal vr
+                    return (JumpCmp cmp l vl' vr')
                 SetLabel ('_':'W':_) -> do
                     let assignedInFuture = concat $ map assigned ss
                     clear assignedInFuture
@@ -108,6 +112,7 @@ used (JumpZero l v) = usedV v
 used (JumpNotZero l v) = usedV v
 used (JumpNeg l v) = usedV v
 used (JumpPos l v) = usedV v
+used (JumpCmp _ _ vl vr) = usedV vl ++ usedV vr
 used _ = []
 
 usedT (Array n v) = n : usedV v

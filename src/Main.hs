@@ -21,6 +21,7 @@ import qualified ProgramStructure as S
 import Desugaring
 import TypeChecker
 import ConstantFolder
+import BooleanIffer
 import ReturnChecker
 import ScopeRenamer
 import qualified LinearRepresentation as L
@@ -125,10 +126,12 @@ processAST progs print = do
     liftIO $ dumpPass print 'F' 1 (S.printi 0 passOne)
     passTwo <- liftExcept $ foldConstants passOne
     liftIO $ dumpPass print 'F' 2 (S.printi 0 passTwo)
-    passThree <- liftExcept $ checkReturnPaths passTwo
-    liftIO $ dumpPass print 'F' 3 (S.printi 0 passThree)
+    passTwoHalf <- liftExcept $ ifBools passTwo
+    liftIO $ dumpPass print 'F' 3 (S.printi 0 passTwoHalf)
+    passThree <- liftExcept $ checkReturnPaths passTwoHalf
+    liftIO $ dumpPass print 'F' 4 (S.printi 0 passThree)
     passFour <- liftExcept $ renameScopedVars passThree
-    liftIO $ dumpPass print 'F' 4 (S.printi 0 passFour)
+    liftIO $ dumpPass print 'F' 5 (S.printi 0 passFour)
     return (passFour, cls)
 
 dumpPass print phase pass contents =

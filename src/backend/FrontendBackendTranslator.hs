@@ -225,10 +225,11 @@ emitS (A.ReturnVoid _) = tell [B.Return]
 emitS (A.ExprStmt _ e) = emitE e >> return ()
 emitS (A.BlockStmt _ b) = emitB b
 emitS (A.IfElse _ ec st sf) = do
-    enc <- emitE ec
+    lif <- lift $ newLabel "_IIF"
     lelse <- lift $ newLabel "_IELSE"
     lend <- lift $ newLabel "_IEND"
-    tell [B.JumpZero lelse (B.Var enc)]
+    emitCond ec lif lelse False
+    tell [B.SetLabel lif]
     emitS st
     tell [B.Jump lend, B.SetLabel lelse]
     emitS sf
@@ -236,11 +237,12 @@ emitS (A.IfElse _ ec st sf) = do
 emitS (A.While _ ec s) = do
     lcond <- lift $ newLabel "_WCOND"
     lbegin <- lift $ newLabel "_WBEG"
+    lend <- lift $ newLabel "_WEND"
     tell [B.Jump lcond, B.SetLabel lbegin]
     emitS s
     tell [B.SetLabel lcond]
-    enc <- emitE ec
-    tell [B.JumpNotZero lbegin (B.Var enc)]
+    emitCond ec lbegin lend True
+    tell [B.SetLabel lend]
 
 nameOf :: String -> WriterT [B.Stmt] SM String
 nameOf x = do
@@ -386,14 +388,16 @@ emitE (A.UnaryOp _ op e) = do
             return n
 emitE (A.BinaryOp p (A.Add p2) (A.UnaryOp _ (A.Neg _) el) er) = emitE (A.BinaryOp p (A.Sub p2) er el)
 emitE (A.BinaryOp p (A.Add p2) el (A.UnaryOp _ (A.Neg _) er)) = emitE (A.BinaryOp p (A.Sub p2) el er)
-emitE (A.BinaryOp _ op el er) = 
+emitE e@(A.BinaryOp _ op el er) = 
     case op of
-        A.Lt _ -> compare op el er
-        A.Le _ -> compare op el er
-        A.Equ _ -> compare op el er
-        A.Neq _ -> compare op el er
-        A.Gt _ -> compare op el er
-        A.Ge _ -> compare op el er
+        A.Lt _ -> compare e
+        A.Le _ -> compare e
+        A.Equ _ -> compare e
+        A.Neq _ -> compare e
+        A.Gt _ -> compare e
+        A.Ge _ -> compare e
+        A.And _ -> compare e
+        A.Or _ -> compare e
         _ -> do
             enl <- emitE el
             enr <- emitE er
@@ -405,35 +409,19 @@ emitE (A.BinaryOp _ op el er) =
                         A.Mul _ -> B.Mul
                         A.Div _ -> B.Div
                         A.Mod _ -> B.Mod
-                        A.And _ -> B.And
-                        A.Or _ -> B.Or
             if isLit el && bop /= B.Sub && bop /= B.Div && bop /= B.Mod then
                 tell [B.VarDecl ent n (B.BinOp bop (B.Var enr) (B.Var enl))]
             else
                 tell [B.VarDecl ent n (B.BinOp bop (B.Var enl) (B.Var enr))]
             return n
     where
-        compare op el er = do
-            enl <- emitE el
-            enr <- emitE er
-            ent <- typeOf enl
+        compare e = do
             nb <- lift $ newName B.ByteT
-            nt <- lift $ newName ent
-            l <- lift $ newLabel "_C"
-            let (val, cond) = case op of
-                        A.Equ _ -> (1, B.JumpZero l (B.Var nt))
-                        A.Neq _ -> (1, B.JumpNotZero l (B.Var nt))
-                        A.Lt _ -> (1, B.JumpNeg l (B.Var nt))
-                        A.Gt _ -> (1, B.JumpPos l (B.Var nt))
-                        A.Le _ -> (0, B.JumpPos l (B.Var nt))
-                        A.Ge _ -> (0, B.JumpNeg l (B.Var nt))
-            tell [
-                    B.VarDecl B.ByteT nb (B.Val (B.Const (B.ByteC val))),
-                    B.VarDecl ent nt (B.BinOp B.Sub (B.Var enl) (B.Var enr)),
-                    cond,
-                    B.Assign B.ByteT (B.Variable nb) (B.Val (B.Const (B.ByteC (if val == 1 then 0 else 1)))),
-                    B.SetLabel l
-                  ]
+            tell [B.VarDecl B.ByteT nb (B.Val (B.Const (B.ByteC 0)))]
+            ltrue <- lift $ newLabel "_C"
+            lfalse <- lift $ newLabel "_C"
+            emitCond e ltrue lfalse False
+            tell [B.SetLabel ltrue, B.Assign B.ByteT (B.Variable nb) (B.Val (B.Const (B.ByteC 1))), B.SetLabel lfalse]
             return nb
         isLit (A.Lit _ _) = True
         isLit _ = False
@@ -453,3 +441,41 @@ emitE (A.App _ el es) = do
             n <- lift $ newName t
             tell [B.VarDecl t n (B.MCall en i (map B.Var (en:ens)))]
             return n
+
+emitCond (A.UnaryOp p (A.Not _) e) ltrue lfalse neg =
+    emitCond e lfalse ltrue (not neg)
+emitCond (A.BinaryOp p op el er) ltrue lfalse neg =
+    if A.isAA op then do
+        nl <- emitE el
+        nr <- emitE er
+        case neg of
+            False -> tell [B.JumpCmp (opNeg (opC op)) lfalse (B.Var nl) (B.Var nr)]
+            True -> tell [B.JumpCmp (opC op) ltrue (B.Var nl) (B.Var nr)]
+    else case op of
+        (A.And _) -> do
+            emitCond el ltrue lfalse False
+            emitCond er ltrue lfalse neg
+        (A.Or _) -> do
+            lnext <- lift $ newLabel "_COR"
+            emitCond el ltrue lnext True
+            tell [B.SetLabel lnext]
+            emitCond er ltrue lfalse neg
+emitCond e ltrue lfalse neg = do
+    n <- emitE e
+    case neg of
+        False -> tell [B.JumpZero lfalse (B.Var n)]
+        True -> tell [B.JumpNotZero ltrue (B.Var n)]
+
+opC (A.Equ _) = B.Eq
+opC (A.Neq _) = B.Ne
+opC (A.Le _) = B.Le
+opC (A.Lt _) = B.Lt
+opC (A.Ge _) = B.Ge
+opC (A.Gt _) = B.Gt
+
+opNeg B.Eq = B.Ne
+opNeg B.Ne = B.Eq
+opNeg B.Le = B.Gt
+opNeg B.Lt = B.Ge
+opNeg B.Ge = B.Lt
+opNeg B.Gt = B.Le

@@ -273,3 +273,17 @@ instance PrettyPrint (Lit a) where
     printi _ (Bool _ b) = if b then "true" else "false"
     printi _ (Null _) = "null"
 
+
+isBB (And _) = True
+isBB (Or _) = True
+isBB _ = False
+isAA (Equ _) = True
+isAA (Neq _) = True
+isAA (Le _) = True
+isAA (Lt _) = True
+isAA (Ge _) = True
+isAA (Gt _) = True
+isAA _ = False
+
+isCond (BinaryOp _ op _ _) = isBB op || isAA op
+isCond _ = False

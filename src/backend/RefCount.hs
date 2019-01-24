@@ -95,13 +95,15 @@ addRefCounters sts args = evalState run 0
             JumpNotZero _ _ -> killIfNoJump ss tin refs s ds acc dead
             JumpNeg _ _ -> killIfNoJump ss tin refs s ds acc dead
             JumpPos _ _ -> killIfNoJump ss tin refs s ds acc dead
+            JumpCmp _ _ _ _ -> killIfNoJump ss tin refs s ds acc dead
             SetLabel l ->
                 if isElseLabel l then do
                     let isJump = \s -> case s of
                                         JumpZero k _ -> l == k
                                         JumpNotZero k _ -> l == k
+                                        JumpCmp _ k _ _ -> l == k
                                         _ -> False
-                    let (_,_,ou) = head $ filter (\(s,_,_) -> isJump s) sts
+                    let ou = nub $ concat $ map (\(_,_,o)->o) $ filter (\(s,_,_) -> isJump s) sts
                     let deadIfElse = ou \\ tout
                     dds <- kill deadIfElse refs
                     walk ss refs (ds ++ dds ++ s : acc)

@@ -151,6 +151,10 @@ allocateRegisters sst args regMap =
             JumpPos l (Var n) -> do
                 assertInRegs [n]
                 if take 2 l /= "_C" then spill (tin \\ [n]) else return ()
+            JumpCmp cmp l vl vr -> do
+                let vars = (case vl of {(Var n)->[n];_->[]} ++ case vr of {(Var n)->[n];_->[]})
+                assertInRegs vars
+                if take 2 l /= "_C" then spill (tin \\ vars) else return ()
             SetLabel l -> if take 2 l /= "_C" then spill tin else return ()
             _ -> return ()
         prep <- getst
@@ -439,6 +443,12 @@ emitI stmts stackSize = do
                 emitExpr Nothing (Val (Var n)) rbx prep
                 tell [X.CMP rbx (X.Constant 0), X.JG (X.Label l)]
         spillAndLoad prep after
+    emitStmt ((JumpCmp cmp l vl vr), before, prep@(umap,_), after) = do
+        spillAndLoad before prep
+        let vlc = valueConv umap vl
+        let vrc = valueConv umap vr
+        tell [X.CMP vlc vrc, makeJump cmp l]
+        spillAndLoad prep after
     prepareCall free = do
         let callerSaved = [X.R11, X.R10, X.R9, X.R8, X.RDX, X.RCX, X.RAX, X.RSI, X.RDI]
         prepare free callerSaved
@@ -648,6 +658,13 @@ emitI stmts stackSize = do
             load = mapM_ loadOne
             loadOne (m,r) = tell [X.MOV m r] --here is the diference
 
+    makeJump Eq l = X.JE (X.Label l)
+    makeJump Ne l = X.JNE (X.Label l)
+    makeJump Le l = X.JLE (X.Label l)
+    makeJump Lt l = X.JL (X.Label l)
+    makeJump Ge l = X.JGE (X.Label l)
+    makeJump Gt l = X.JG (X.Label l)
+        
 infixl 1 <|>
 (<|>) :: Maybe a -> Maybe a -> a
 (<|>) (Just x) _ = x

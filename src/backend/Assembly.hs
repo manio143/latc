@@ -25,8 +25,12 @@ data Instruction = ADD Value Value
                  | JMP Value
                  | JZ Value
                  | JNZ Value
+                 | JE Value
+                 | JNE Value
                  | JL Value
+                 | JLE Value
                  | JG Value
+                 | JGE Value
                  | CMP Value Value
                  | TEST Value Value
                  | PUSH Value
