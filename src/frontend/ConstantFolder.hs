@@ -276,6 +276,13 @@ foldE (BinaryOp p op el er) = do
             (String p i, String _ j) -> if f $ compare i j then return (true p)
                                  else return (false p)
             _ -> throw ("WTF\n"++show r, BuiltIn)
+    checkConst _ _ _ (BinaryOp p op l@(Lit _ _) e) = return (BinaryOp p (reverseSide op) e l)
+            where
+                reverseSide (Lt p) = (Gt p)
+                reverseSide (Le p) = (Ge p)
+                reverseSide (Gt p) = (Lt p)
+                reverseSide (Ge p) = (Le p)
+                reverseSide op = op
     checkConst _ _ _ r = return r
     foldconsts :: BinOp Position -> [Expr Position] -> [Expr Position]
     foldconsts op@(Add _) ((Lit p (String _ i)):(Lit _ (String _ j)):xs) = foldconsts op $ (Lit p (String p (i ++ j))):xs

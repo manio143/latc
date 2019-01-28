@@ -1,0 +1,11 @@
+int main () {
+  int x;
+  x=readInt();
+  printInt(1111111);
+  if (33333 >= x) {
+    printInt(1042);
+  } else {
+    printInt(2042);
+  }
+  return 0 ;
+}
