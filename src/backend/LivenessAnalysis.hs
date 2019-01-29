@@ -1,7 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 module LivenessAnalysis where
 
-import Data.List (nub, (\\))
+--import Data.List (nub, (\\))
+import Data.Set hiding (map, foldl, filter)
 import Control.Monad.State
 
 import LinearRepresentation
@@ -20,18 +21,19 @@ analize :: [Stmt] -> [(Stmt, [Name],[Name])]
 analize stmts = 
     let indexed = zip stmts [1..]
         succ = map (findSucc indexed) indexed
-        inout = map (\(s,i,n) -> (s,i,n,[],[])) succ
-    in map (\(s,_,_,tin,tout)->(s,tin,tout)) $ work inout
+        inout = map (\(s,i,n) -> (s,i,n,fromList [],fromList [])) succ
+    in map (\(s,_,_,tin,tout)->(s,toList tin,toList tout)) $ work inout
   where
-    work :: [(Stmt, Integer,[Integer],[Name],[Name])] -> [(Stmt, Integer,[Integer],[Name],[Name])]
+    work :: [(Stmt, Integer,[Integer],Set Name,Set Name)] -> [(Stmt, Integer,[Integer],Set Name,Set Name)]
     work inout =
         let ninout = map (proc inout) inout in
         if ninout /= inout then work ninout
         else ninout
     proc inout (s,i,n,tin,tout) =
-        let succ = concat $ map (\nn -> filter (\(_,ii,_,_,_) -> nn == ii) inout) n
-            succin = map (\(_,_,_,sin,_)->sin) succ
-        in (s,i,n,nub $ used s ++ (tout \\ assigned s),nub $ concat succin)
+        let succin = select (\(_,ii,_,_,_) -> elem ii n) (\(_,_,_,sin,_)->sin) inout []
+        in (s,i,n, union (fromList $ used s) (tout `difference` (fromList $ assigned s)), unions succin)
+    select pred f (h:t) acc = if pred h then select pred f t (f h : acc) else select pred f t acc
+    select _ _ [] acc = reverse acc
 
 findSucc :: [(Stmt, Integer)] -> (Stmt, Integer) -> (Stmt, Integer, [Integer])
 findSucc ind (s,i) = 
