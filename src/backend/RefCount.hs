@@ -78,6 +78,8 @@ addRefCounters sts args = evalState run 0
                                     MCall _ _ _ -> []
                                     _ -> [ix]
                         walk ss refs (ds ++ fin : iix ++ bX : dx : aX : acc)
+            ReturnVal Reference (Val (Const Null)) -> do
+                walk ss refs (s : ds ++ acc)
             ReturnVal Reference e -> do
                 x <- newVar
                 let aX = VarDecl Reference x e
@@ -120,5 +122,5 @@ addRefCounters sts args = evalState run 0
     kill dead refs = do
         let deadrefs = filter (\d -> elem d refs) dead
         mapM decr deadrefs
-    isElseLabel (a:b:c:d:_) = [a,b,c,d] == "_IEL"
+    isElseLabel (a:b:c:d:_) = [a,b,c,d] == "_IEL" || [a,b,c,d] == "_WBE"
     isElseLabel _ = False
