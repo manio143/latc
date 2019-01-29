@@ -572,6 +572,7 @@ checkE (Member pos e id _) = do
         StringT _ -> cont pos ne id (name "String")
         ArrayT _ _ -> cont pos ne id (name "Array")
         ClassT _ name -> cont pos ne id name
+        InfferedT _ -> cont pos ne id (name "Object")
         _ -> throw ("Expected an object, given "++typeName et, pos)
     where
         cont pos e id@(Ident p i) cls@(Ident _ clsName) = do
