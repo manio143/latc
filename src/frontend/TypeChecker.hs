@@ -478,7 +478,7 @@ checkE (Lit pos l@(Int _ i)) =
 checkE (Lit pos l@(String _ _)) = return (Lit pos l, StringT pos)
 checkE (Lit pos l@(Bool _ _)) = return (Lit pos l, BoolT pos)
 checkE (Lit pos l@(Byte _ _)) = return (Lit pos l, ByteT pos)
-checkE (Lit pos l@(Null _)) = return (Lit pos l, ClassT pos (name "Object"))
+checkE (Lit pos l@(Null _)) = return (Lit pos l, InfferedT pos)
 checkE (Var pos id) = do
     mv <- getVar id
     case mv of
@@ -620,6 +620,10 @@ checkE (BinaryOp pos op el er) = do
         (Neq _, ClassT _ (Ident _ c), StringT _) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just c)) [ner]), bool)
         (Equ _, StringT _, ClassT _ _) -> return (App pos (Member pos nel (name "equals") (Just "String")) [ner], bool)
         (Neq _, StringT _, ClassT _ _) -> return (UnaryOp pos (Not pos) (App pos (Member pos nel (name "equals") (Just "String")) [ner]), bool)
+        (Equ _, InfferedT _, ClassT _ _) -> return (BinaryOp pos op nel ner, bool)
+        (Equ _, ClassT _ _, InfferedT _) -> return (BinaryOp pos op nel ner, bool)
+        (Neq _, InfferedT _, ClassT _ _) -> return (BinaryOp pos op nel ner, bool)
+        (Neq _, ClassT _ _, InfferedT _) -> return (BinaryOp pos op nel ner, bool)
         (op, a, b) -> 
             if a == b then
                 case a of
