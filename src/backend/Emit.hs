@@ -206,12 +206,21 @@ emitI stmts (regInts, stackSize, vmap) = do
         let rbx = X.Register (X.regSize t X.RBX)
         let tgt = case lookup n vmap of
                     Nothing -> rbx
-                    _ -> getVal vmap n
+                    _ -> case getVal vmap n of
+                            r@(X.Register _) ->
+                                if elem n $ alive (i+1) then r else rbx
+                            m -> m
         emitExpr (Just t) e tgt i
     emitStmt (i, Assign t tg e) = do
         case tg of
             Variable n -> do
-                let tgt = getVal vmap n
+                let rbx = X.Register (X.regSize t X.RBX)
+                let tgt = case lookup n vmap of
+                            Nothing -> rbx
+                            _ -> case getVal vmap n of
+                                    r@(X.Register _) ->
+                                        if elem n $ alive (i+1) then r else rbx
+                                    m -> m
                 emitExpr (Just t) e tgt i
             Array a idx -> do
                 emitExpr (Just t) e (X.Register (X.regSize t X.R12)) i
@@ -478,6 +487,8 @@ emitI stmts (regInts, stackSize, vmap) = do
     makeJump Gt l = X.JG (X.Label l)
         
     freeAt i = map fst $ filter (\(r,is) -> any (\(b,f,u) -> b == Free && f <= i && i <= u) is) regInts
+
+    alive i = map (\[(Busy b, _,_)] -> b) $ filter (\l -> length l == 1) $ map (\(r,is) -> let l = filter (\(b,f,u) -> b /= Free && f <= i && i <= u) is in l) regInts
 
     regOrEmit :: Name -> X.Reg -> Integer -> Writer [X.Instruction] X.Value
     regOrEmit n r i = do

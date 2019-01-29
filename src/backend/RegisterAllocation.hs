@@ -15,7 +15,7 @@ import LinearRepresentation
 import LivenessAnalysis
 
 type ValMap = [(Name,[X.Value])]
-data Free = Free | Busy deriving (Eq,Show)
+data Free = Free | Busy Name deriving (Eq,Show)
 type Interval = (Free, Integer, Integer)
 type RegIntervals = [(X.Reg, [Interval])]
 
@@ -46,17 +46,18 @@ allocateRegisters sst args regMap = (fstt computedState, stackSize, valMap)
     stackSize = sndd computedState - 8
 
     insertIntervalsFromValMap state (name, [X.Register r]) =
-        let ints = stripNames $ filter (\(n,_,_) -> n == name) intervals
+        let ints = filter (\(n,_,_) -> n == name) intervals
         in insertIntoReg name r ints state
     insertIntervalsFromValMap (f,s,m) (name, [mem]) =
-        let ints = stripNames $ filter (\(n,_,_) -> n == name) intervals
+        let ints = filter (\(n,_,_) -> n == name) intervals
             state = if length ints > 0 then 
                         (f,s,insV (name,mem) m)
                     else (f,s,m)
         in case capable ints state of
             Just r -> insertIntoReg name r ints state
             Nothing -> state
-    insertIntervals state (name, ints) =
+    insertIntervals state (name, ints') =
+        let ints = map (\(a,b) -> (name,a,b)) ints' in
         case capable ints state of
             Just r -> insertIntoReg name r ints state
             Nothing -> insertSpill name state
@@ -70,7 +71,7 @@ allocateRegisters sst args regMap = (fstt computedState, stackSize, valMap)
         in listToMaybe $ map fst $ filter (canFit ints) regss
     canFit ints (reg, intervals) = all (canFitOne intervals) ints
     canFitOne intervals int = any (fits int) intervals
-    fits (s,e) (b,f,u) = b == Free && f <= s && e <= u
+    fits (n,s,e) (b,f,u) = b == Free && f <= s && e <= u
 
     insertIntoReg name r ints (regss, ss, sm) =
         let t = findType name in
@@ -79,10 +80,10 @@ allocateRegisters sst args regMap = (fstt computedState, stackSize, valMap)
     ins r ints ((q,intervals):ss) | r == q = (r,insi ints intervals) : ss
                                   | otherwise = (q,intervals) : ins r ints ss
     insi ints intervals = foldl (insiOne) intervals ints
-    insiOne ((b,f,t):ii) (s,e) | fits (s,e) (b,f,t) =
+    insiOne ((b,f,t):ii) (n,s,e) | fits (n,s,e) (b,f,t) =
         let before = if s > f then [(Free,f,s-1)] else []
             after = if e < t then [(Free,e+1,t)] else []
-        in before ++ [(Busy, s,e)] ++ after ++ ii
+        in before ++ [(Busy n, s,e)] ++ after ++ ii
     insiOne (i:ii) int = i : insiOne ii int
     insR (n,r) = insV (n, X.Register r)
     insV (n,v) ((m,l):ms) | m == n = (m,v : l) : ms
