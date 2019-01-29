@@ -122,6 +122,8 @@ void __errorNull() {
 }
 
 obj __createString(char *c) {
+    if (c == NULL)
+        return __createString(emptyString);
     obj r = __new(&_class_String);
     struct String *str = malloc(sizeof(struct String));
     r->data = str;
@@ -172,8 +174,13 @@ obj _Array_toString(obj arr) {
         } else {
             obj *elements = array->elements;
             obj element = elements[i];
-            obj (*toString)(obj) = ((void **)element->type->methods)[0];
-            strings[i] = toString(element);
+            if (element == NULL) {
+                strings[i] = __createString("null");
+                __incRef(strings[i]);
+            } else {
+                obj (*toString)(obj) = ((void **)element->type->methods)[0];
+                strings[i] = toString(element);
+            }
         }
         lenghts[i] = u8_strlen(((struct String *)strings[i]->data)->data);
         totalLenght += lenghts[i];
@@ -220,6 +227,8 @@ int32_t _String_getHashCode(obj str) {
     return hash;
 }
 int8_t _String_equals(obj o1, obj o2) {
+    if (o2 == NULL)
+        return false;
     if (o2->type != &_class_String)
         return false;
     if (_String_length(o1) != _String_length(o2))
@@ -271,6 +280,10 @@ int32_t _String_length(obj str) {
     return string->length;
 }
 int32_t _String_indexOf(obj str, obj substr, int32_t startFrom) {
+    if (substr == NULL) {
+        errMsg = "ERROR: IndexOf null substring argument.";
+        error();
+    }
     if (startFrom >= _String_length(str)) {
         errMsg = "ERROR: IndexOf starting index is too big.";
         error();
@@ -301,16 +314,28 @@ obj _String_getBytes(obj str) {
     return arr;
 }
 int8_t _String_endsWith(obj str, obj substr) {
+    if (substr == NULL) {
+        errMsg = "ERROR: EndsWith null substring argument.";
+        error();
+    }
     uint8_t *rs = ((struct String *)str->data)->data;
     uint8_t *rsub = ((struct String *)substr->data)->data;
     return u8_endswith(rs, rsub);
 }
 int8_t _String_startsWith(obj str, obj substr) {
+    if (substr == NULL) {
+        errMsg = "ERROR: StartsWith null substring argument.";
+        error();
+    }
     uint8_t *rs = ((struct String *)str->data)->data;
     uint8_t *rsub = ((struct String *)substr->data)->data;
     return u8_startswith(rs, rsub);
 }
 obj _String_concat(obj str, obj secondstr) {
+    if (secondstr == NULL) {
+        __incRef(str);
+        return str;
+    }
     uint8_t *rs1 = ((struct String *)str->data)->data;
     uint8_t *rs2 = ((struct String *)secondstr->data)->data;
     int32_t len1 = u8_strlen(rs1);
@@ -345,6 +370,8 @@ int32_t _String_charAt(obj str, int32_t index) {
 
 // functions
 int8_t printString(obj str) {
+    if (str == NULL)
+        str = __createString("null");
     __incRef(str);
     uint8_t *rs = ((struct String *)str->data)->data;
     printf("%s\n", rs);
@@ -389,6 +416,8 @@ obj boolToString(int8_t b) {
 }
 
 int8_t print(obj o) {
+    if (o == NULL)
+        o = __createString("null");
     __incRef(o);
     obj (*toStr)(obj) = ((void **)o->type->methods)[0];
     obj str = toStr(o);
@@ -399,6 +428,10 @@ int8_t print(obj o) {
 }
 
 int8_t printBinArray(obj arr) {
+    if (arr == NULL){
+        print(arr);
+        return 0;
+    }
     __incRef(arr);
     struct Array *array = arr->data;
     fwrite(array->elements, sizeof(int8_t), array->length, stdout);
