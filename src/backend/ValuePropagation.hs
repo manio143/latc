@@ -51,18 +51,6 @@ propS stmts =
                 ReturnVal t e -> do
                     e' <- propE e
                     return (ReturnVal t e')
-                JumpZero l v -> do
-                    v' <- updatedVal v
-                    return (JumpZero l v')
-                JumpNotZero l v -> do
-                    v' <- updatedVal v
-                    return (JumpNotZero l v')
-                JumpNeg l v -> do
-                    v' <- updatedVal v
-                    return (JumpNeg l v')
-                JumpPos l v -> do
-                    v' <- updatedVal v
-                    return (JumpPos l v')
                 JumpCmp cmp l vl vr -> do
                     vl' <- updatedVal vl
                     vr' <- updatedVal vr
@@ -108,10 +96,6 @@ used' e = used e
 used (VarDecl t n e) = usedE e
 used (Assign t tg e) = usedT tg ++ usedE e
 used (ReturnVal t e) = usedE e
-used (JumpZero l v) = usedV v
-used (JumpNotZero l v) = usedV v
-used (JumpNeg l v) = usedV v
-used (JumpPos l v) = usedV v
 used (JumpCmp _ _ vl vr) = usedV vl ++ usedV vr
 used _ = []
 

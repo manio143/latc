@@ -140,18 +140,6 @@ allocateRegisters sst args regMap =
             ReturnVal t e ->
                 assertInRegs (usedE e)
             Jump _ -> spill tin
-            JumpZero l (Var n) -> do
-                assertInRegs [n]
-                if take 2 l /= "_C" then spill (tin \\ [n]) else return ()
-            JumpNotZero l (Var n) -> do
-                assertInRegs [n]
-                if take 2 l /= "_C" then spill (tin \\ [n]) else return ()
-            JumpNeg l (Var n) -> do
-                assertInRegs [n]
-                if take 2 l /= "_C" then spill (tin \\ [n]) else return ()
-            JumpPos l (Var n) -> do
-                assertInRegs [n]
-                if take 2 l /= "_C" then spill (tin \\ [n]) else return ()
             JumpCmp cmp l vl vr -> do
                 let vars = (case vl of {(Var n)->[n];_->[]} ++ case vr of {(Var n)->[n];_->[]})
                 if take 2 l /= "_C" then spill tin else return ()
@@ -410,58 +398,13 @@ emitI stmts stackSize = do
         spillAndLoad before prep
         tell [X.JMP (X.Label l)]
         spillAndLoad prep after
-    emitStmt ((JumpZero l v), before, prep@(umap,_), after) = do
-        spillAndLoad before prep
-        case v of
-            Const (IntC 0) -> tell [X.JMP (X.Label l)]
-            Const (ByteC 0) -> tell [X.JMP (X.Label l)]
-            Var n -> do
-                let (X.Register r) = fromJust $ getReg umap n
-                let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
-                emitExpr Nothing (Val (Var n)) rbx prep
-                tell [X.TEST rbx rbx, X.JZ (X.Label l)]
-            _ -> return ()
-        spillAndLoad prep after
-    emitStmt ((JumpNotZero l v), before, prep@(umap,_), after) = do
-        spillAndLoad before prep
-        case v of
-            Const (IntC x) -> if x /= 0 then tell [X.JMP (X.Label l)] else return ()
-            Const (ByteC x) -> if x /= 0 then tell [X.JMP (X.Label l)] else return ()
-            Var n -> do
-                let (X.Register r) = fromJust $ getReg umap n
-                let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
-                emitExpr Nothing (Val (Var n)) rbx prep
-                tell [X.TEST rbx rbx, X.JNZ (X.Label l)]
-        spillAndLoad prep after
-    emitStmt ((JumpNeg l v), before, prep@(umap,_), after) = do
-        spillAndLoad before prep
-        case v of
-            Const (IntC x) -> if x < 0 then tell [X.JMP (X.Label l)] else return ()
-            Const (ByteC x) -> if x < 0 then tell [X.JMP (X.Label l)] else return ()
-            Var n -> do
-                let (X.Register r) = fromJust $ getReg umap n
-                let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
-                emitExpr Nothing (Val (Var n)) rbx prep
-                tell [X.CMP rbx (X.Constant 0), X.JL (X.Label l)]
-        spillAndLoad prep after
-    emitStmt ((JumpPos l v), before, prep@(umap,_), after) = do
-        spillAndLoad before prep
-        case v of
-            Const (IntC x) -> if x > 0 then tell [X.JMP (X.Label l)] else return ()
-            Const (ByteC x) -> if x > 0 then tell [X.JMP (X.Label l)] else return ()
-            Var n -> do
-                let (X.Register r) = fromJust $ getReg umap n
-                let rbx = X.Register (X.regSize (X.regSizeR r) X.RBX)
-                emitExpr Nothing (Val (Var n)) rbx prep
-                tell [X.CMP rbx (X.Constant 0), X.JG (X.Label l)]
-        spillAndLoad prep after
     emitStmt ((JumpCmp cmp l vl vr), before, prep@(umap,_), after) = do
         spillAndLoad before prep
         storeToMem prep
         let vlc = valueConv umap vl
         let vrc = valueConv umap vr
         tell [X.CMP vlc vrc, makeJump cmp l]
-        spillAndLoad prep after
+        --spillAndLoad prep after
     prepareCall free = do
         let callerSaved = [X.R11, X.R10, X.R9, X.R8, X.RDX, X.RCX, X.RAX, X.RSI, X.RDI]
         prepare free callerSaved

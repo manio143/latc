@@ -26,10 +26,6 @@ findSucc :: [(Stmt, Integer)] -> (Stmt, Integer) -> (Stmt, Integer, [Integer])
 findSucc ind (s,i) = 
     case s of
         Jump l -> (s,i,[findIndex ind (SetLabel l)])
-        JumpZero l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
-        JumpNotZero l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
-        JumpNeg l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
-        JumpPos l _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
         JumpCmp _ l _ _ -> (s,i,[i+1,findIndex ind (SetLabel l)])
         ReturnVal _ _ -> (s,i,[])
         Return -> (s,i,[])

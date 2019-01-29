@@ -463,8 +463,8 @@ emitCond (A.BinaryOp p op el er) ltrue lfalse neg =
 emitCond e ltrue lfalse neg = do
     n <- emitE e
     case neg of
-        False -> tell [B.JumpZero lfalse (B.Var n)]
-        True -> tell [B.JumpNotZero ltrue (B.Var n)]
+        False -> tell [B.JumpCmp B.Eq lfalse (B.Var n) (B.Const $ B.ByteC 0)]
+        True -> tell [B.JumpCmp B.Ne ltrue (B.Var n) (B.Const $ B.ByteC 0)]
 
 opC (A.Equ _) = B.Eq
 opC (A.Neq _) = B.Ne

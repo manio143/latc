@@ -31,15 +31,11 @@ data Stmt = VarDecl Type Name Expr
           | Return
           | SetLabel Label
           | Jump Label
-          | JumpZero Label Value
-          | JumpNotZero Label Value
-          | JumpNeg Label Value
-          | JumpPos Label Value
           | JumpCmp Cmp Label Value Value
           deriving (Eq, Ord, Show)
 
 data Cmp = Eq | Ne | Le | Lt | Ge | Gt
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord)
 
 data Target = Variable Name | Array Name Value | Member Name Offset
     deriving (Eq, Ord, Show)
@@ -80,10 +76,6 @@ linShowStmt (ReturnVal t e) = "    return "++linShowExp e
 linShowStmt (Return) = "    return"
 linShowStmt (SetLabel l) = "  "++l++":"
 linShowStmt (Jump l) = "    jump "++l
-linShowStmt (JumpZero l v) = "    jump "++show l++" if "++show v ++" == 0 (false)"
-linShowStmt (JumpNotZero l v) = "    jump "++show l++" if "++show v ++" != 0 (true)"
-linShowStmt (JumpNeg l v) = "    jump "++show l++" if "++show v ++" < 0"
-linShowStmt (JumpPos l v) = "    jump "++show l++" if "++show v ++" > 0"
 linShowStmt (JumpCmp cmp l vl vr) = "    jump "++show l++" if "++show vl++" "++show cmp++" "++show vr
 
 linShowExp (Val v) = show v
@@ -115,9 +107,11 @@ instance Show Op where
     show Mod = "%"
     show And = "&&"
     show Or = "||"
-    -- show Eq = "=="
-    -- show Ne = "!="
-    -- show Lt = "<"
-    -- show Gt = ">"
-    -- show Le = "<="
-    -- show Ge = ">="
+
+instance Show Cmp where
+    show Eq = "=="
+    show Ne = "!="
+    show Lt = "<"
+    show Gt = ">"
+    show Le = "<="
+    show Ge = ">="
