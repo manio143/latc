@@ -254,14 +254,14 @@ emitI stmts (regInts, stackSize, vmap) = do
 
     prepareCall free = do
         let callerSaved = [X.R11, X.R10, X.R9, X.R8, X.RDX, X.RCX, X.RAX, X.RSI, X.RDI]
-        prepare free callerSaved
+        prepare free callerSaved True
     prepareDiv free = do
         let callerSaved = [X.RAX, X.RDX]
-        prepare free callerSaved
-    prepare free saved = do
+        prepare free callerSaved False
+    prepare free saved align = do
         let used = saved \\ free
             usedAsVal = map X.Register used
-            (alignstack, dealignstack) = if (length used) `mod` 2 == 0 then ([],[]) else ([X.SUB (X.Register X.RSP) (X.Constant 8)], [X.ADD (X.Register X.RSP) (X.Constant 8)])
+            (alignstack, dealignstack) = if not align || (length used) `mod` 2 == 0 then ([],[]) else ([X.SUB (X.Register X.RSP) (X.Constant 8)], [X.ADD (X.Register X.RSP) (X.Constant 8)])
         tell (alignstack ++ map X.PUSH usedAsVal)
         return (tell (map X.POP (reverse usedAsVal) ++ dealignstack))
 
@@ -450,9 +450,9 @@ emitI stmts (regInts, stackSize, vmap) = do
         ]
 
     emitCall t fun vs target i = do
-        let fr = freeAt i
+        let fr = freeAt (i + 1)
         doneCall <- prepareCall fr
-        setupCallArgs vs fr
+        setupCallArgs vs (freeAt i)
         call fun
         tell [moverr X.RBX X.RAX]
         doneCall
