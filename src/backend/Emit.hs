@@ -103,11 +103,14 @@ emitI stmts (regInts, stackSize, vmap) = do
   where
     entry s = do tell [
                     X.PUSH (X.Register X.RBP),
-                    X.PUSH (X.Register X.RBX),
-                    X.PUSH (X.Register X.R12),
-                    X.PUSH (X.Register X.R13),
+                    X.PUSH (X.Register X.RBX)]
+                 if r12 then tell [X.PUSH (X.Register X.R12)]
+                 else return ()
+                 if r13 then tell [X.PUSH (X.Register X.R13)]
+                 else return ()
+                 tell [
                     X.MOV (X.Register X.RBP) (X.Register X.RSP),
-                    X.SUB (X.Register X.RSP) (X.Constant (8 + if s > 0 then ceil16 s else 0))
+                    X.SUB (X.Register X.RSP) (X.Constant (padding + if s > 0 then ceil16 s else 0))
                         -- so that RSP === 0 mod 16
                     ]
         where
@@ -115,6 +118,11 @@ emitI stmts (regInts, stackSize, vmap) = do
                         0 -> x
                         _ -> x + (16 - (x `mod` 16))
     body ss = mapM_ emitStmt ss
+
+    padding = if (r12 && r13) || (not r12 && not r13) then 8 else 0
+
+    r12 = any arrayOrObject $ map snd stmts
+    r13 = any arrayOrObjectAssignment $ map snd stmts
 
     loadArgs vmap = do
         let argsToLoad = filter (\(n,vals) -> length vals == 2) vmap
@@ -125,14 +133,16 @@ emitI stmts (regInts, stackSize, vmap) = do
             mem [m@(X.Memory _ _ _ _),_] = m
             mem [_,m@(X.Memory _ _ _ _)] = m
 
-    exit = tell [
-                    X.MOV (X.Register X.RSP) (X.Register X.RBP),
-                    X.POP (X.Register X.R13),
-                    X.POP (X.Register X.R12),
-                    X.POP (X.Register X.RBX),
-                    X.POP (X.Register X.RBP),
-                    X.RET
-                 ]
+    exit = do
+        tell [X.MOV (X.Register X.RSP) (X.Register X.RBP)]
+        if r13 then tell [X.POP (X.Register X.R13)]
+        else return ()
+        if r12 then tell [X.POP (X.Register X.R12)]
+        else return ()
+        tell [X.POP (X.Register X.RBX),
+                X.POP (X.Register X.RBP),
+                X.RET
+                ]
 
     moverr dest src = 
         let srcSize = X.regSizeR src
@@ -477,6 +487,28 @@ emitI stmts (regInts, stackSize, vmap) = do
             Nothing -> do
                 emitExpr Nothing (Val (Var n)) (X.Register r) i
                 return (X.Register r)
+
+    arrayOrObject s = arrayOrObjectAssign s || arrayOrObjectExpression s
+    arrayOrObjectAssignment s = arrayOrObjectAssign s || isIncr s
+    arrayOrObjectAssign (Assign _ (Array _ _) _) = True
+    arrayOrObjectAssign (Assign _ (Member _ _) _) = True
+    arrayOrObjectAssign (VarDecl _ _ e) = longCall e
+    arrayOrObjectAssign (Assign _ _ e) = longCall e
+    arrayOrObjectAssign (ReturnVal _ e) = longCall e
+    arrayOrObjectAssign _ = False
+    isIncr (IncrCounter _) = True
+    isIncr _ = False
+    longCall (Call _ vs) = length vs > 6
+    longCall (MCall _ _ vs) = length vs > 6
+    longCall _ = False
+    arrayOrObjectExpression (VarDecl _ _ e) = aOOE e
+    arrayOrObjectExpression (Assign _ _ e) = aOOE e
+    arrayOrObjectExpression (ReturnVal _ e) = aOOE e
+    arrayOrObjectExpression _ = False
+    aOOE (MCall _ _ _) = True
+    aOOE (ArrAccess _ _) = True
+    aOOE (MemberAccess _ _) = True
+    aOOE _ = False
 
 infixl 1 <|>
 (<|>) :: Maybe a -> Maybe a -> a
