@@ -27,6 +27,8 @@ type Offset = Integer
 
 data Stmt = VarDecl Type Name Expr
           | Assign Type Target Expr
+          | IncrCounter Name
+          | DecrCounter Name
           | ReturnVal Type Expr
           | Return
           | SetLabel Label
@@ -72,6 +74,8 @@ linShowFun (Fun l t args body) = show t++" "++l++"("++intercalate ", " (map (\(t
 
 linShowStmt (VarDecl t n e) = "    "++show t ++ " "++n++" = "++linShowExp e
 linShowStmt (Assign t g e) = "    "++linShowTarget g ++" = "++linShowExp e
+linShowStmt (IncrCounter n) = "    inc "++n
+linShowStmt (DecrCounter n) = "    decr "++n
 linShowStmt (ReturnVal t e) = "    return "++linShowExp e
 linShowStmt (Return) = "    return"
 linShowStmt (SetLabel l) = "  "++l++":"

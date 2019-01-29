@@ -13,22 +13,16 @@ clean (MOV a b : is) | a == b = clean is
 clean (MOV x y : MOV x' z : is) | x == x' && notDependent x z = clean (MOV x z : is)
 clean (MOV x y : MOV y' x' : is) | x == x' && y == y' = clean (MOV x y : is)
 
-clean (MOV bx x : SUB bx' y : MOV x' bx'' : is) | bx == bx' && bx == bx'' && x == x' && isTemp bx = clean (SUB x y : is)
-clean (MOV bx x : SUB bx' y : MOV z bx'' : is) | bx == bx' && bx == bx'' && z /= y && isTemp bx = clean (MOV z x : SUB z y : is)
+clean (MOV bx x : SUB bx' y : MOV x' bx'' : is) | bx == bx' && bx == bx'' && x == x' && isTemp bx && isReg x = clean (SUB x y : is)
+clean (MOV bx x : SUB bx' y : MOV z bx'' : is) | bx == bx' && bx == bx'' && z /= y && isTemp bx && isReg z = clean (MOV z x : SUB z y : is)
 
-clean (MOV bx x : ADD bx' y : MOV x' bx'' : is) | bx == bx' && bx == bx'' && x == x' && isTemp bx = clean (ADD x y : is)
-clean (MOV bx x : ADD bx' y : MOV y' bx'' : is) | bx == bx' && bx == bx'' && y == y' && isTemp bx = clean (ADD y x : is)
-clean (MOV bx x : ADD bx' y : MOV z bx'' : is) | bx == bx' && bx == bx'' && z /= y && isTemp bx = clean (MOV z x : ADD z y : is)
+clean (MOV bx x : ADD bx' y : MOV x' bx'' : is) | bx == bx' && bx == bx'' && x == x' && isTemp bx && isReg x = clean (ADD x y : is)
+clean (MOV bx x : ADD bx' y : MOV y' bx'' : is) | bx == bx' && bx == bx'' && y == y' && isTemp bx && isReg y = clean (ADD y x : is)
+clean (MOV bx x : ADD bx' y : MOV z bx'' : is) | bx == bx' && bx == bx'' && z /= y && isTemp bx && isReg z = clean (MOV z x : ADD z y : is)
 
-clean (MOV bx x : IMUL bx' y : MOV x' bx'' : is) | bx == bx' && bx == bx'' && x == x' && isTemp bx = clean (IMUL x y : is)
-clean (MOV bx x : IMUL bx' y : MOV y' bx'' : is) | bx == bx' && bx == bx'' && y == y' && isTemp bx = clean (IMUL y x : is)
-clean (MOV bx x : IMUL bx' y : MOV z bx'' : is) | bx == bx' && bx == bx'' && z /= y && isTemp bx = clean (MOV z x : IMUL z y : is)
-
-clean (MOV bx x : AND bx' y : MOV x' bx'' : is) | bx == bx' && bx == bx'' && x == x' = clean (AND x y : is)
-clean (MOV bx x : AND bx' y : MOV y' bx'' : is) | bx == bx' && bx == bx'' && y == y' = clean (AND y x : is)
-
-clean (MOV bx x : OR bx' y : MOV x' bx'' : is) | bx == bx' && bx == bx'' && x == x' = clean (OR x y : is)
-clean (MOV bx x : OR bx' y : MOV y' bx'' : is) | bx == bx' && bx == bx'' && y == y' = clean (OR y x : is)
+clean (MOV bx x : IMUL bx' y : MOV x' bx'' : is) | bx == bx' && bx == bx'' && x == x' && isTemp bx && isReg x = clean (IMUL x y : is)
+clean (MOV bx x : IMUL bx' y : MOV y' bx'' : is) | bx == bx' && bx == bx'' && y == y' && isTemp bx && isReg y = clean (IMUL y x : is)
+clean (MOV bx x : IMUL bx' y : MOV z bx'' : is) | bx == bx' && bx == bx'' && z /= y && isTemp bx && isReg z = clean (MOV z x : IMUL z y : is)
 
 clean (JMP (Label v) : SetLabel el : SetLabel en : is) | v == en = clean (SetLabel el : SetLabel en : is)
 

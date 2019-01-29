@@ -114,11 +114,9 @@ addRefCounters sts args = evalState run 0
         put (i+1)
         return ("c"++show i)
     decr n = do
-        x <- newVar
-        return (VarDecl ByteT x (Call "__decRef" [Var n]))
+        return (DecrCounter n)
     incr n = do
-        x <- newVar
-        return (VarDecl ByteT x (Call "__incRef" [Var n]))
+        return (IncrCounter n)
     kill dead refs = do
         let deadrefs = filter (\d -> elem d refs) dead
         mapM decr deadrefs

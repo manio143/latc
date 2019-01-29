@@ -96,6 +96,8 @@ used' e = used e
 used (VarDecl t n e) = usedE e
 used (Assign t tg e) = usedT tg ++ usedE e
 used (ReturnVal t e) = usedE e
+used (IncrCounter n) = [n]
+used (DecrCounter n) = [n]
 used (JumpCmp _ _ vl vr) = usedV vl ++ usedV vr
 used _ = []
 

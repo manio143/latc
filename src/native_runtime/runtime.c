@@ -116,11 +116,9 @@ obj __cast(obj o, struct Type *t) {
     return NULL;
 }
 
-void __checkNull(obj o) {
-    if (o == NULL) {
-        errMsg = "ERROR: Null pointer reference.";
-        error();
-    }
+void __errorNull() {
+    errMsg = "ERROR: Null pointer reference.";
+    error();
 }
 
 obj __createString(char *c) {

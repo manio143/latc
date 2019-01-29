@@ -1,9 +1,20 @@
+{-# LANGUAGE FlexibleContexts #-}
 module LivenessAnalysis where
 
 import Data.List (nub, (\\))
+import Control.Monad.State
 
 import LinearRepresentation
 import ValuePropagation
+
+type LiveIn = [Name]
+type LiveOut = [Name]
+type StmtWithLiveness = (Stmt, LiveIn, LiveOut)
+type LivenessInformation = [StmtWithLiveness]
+
+type LiveFrom = Integer
+type LiveUntil = Integer
+type LivenessInterval = (Name, LiveFrom, LiveUntil)
 
 analize :: [Stmt] -> [(Stmt, [Name],[Name])]
 analize stmts = 
@@ -43,3 +54,14 @@ analisisPrint livs = concat $ map printOne livs
         printOne (l, ana) = l ++ "\n" ++ (concat $ map printA ana) ++ "\n"
         printA (s, tin, tout) = linShowStmt s ++ "   "++show tin++"   " ++ show tout ++ "\n"
 
+informationToIntervals :: LivenessInformation -> [LivenessInterval]
+informationToIntervals ss = fst $ execState (mapM_ process ss) ([],1)
+    where
+        process (s,tin,tout) = add tin
+        add tin = do
+            curr <- snd <$> get
+            map <- fst <$> get
+            put (foldl (insert curr) map tin, curr + 1)
+        insert c ((n,s,e):ss) m | n == m && c == e + 1 = (n,s,c) : ss
+                                | otherwise = (n,s,e) : insert c ss m
+        insert c [] m = [(m,c,c)]

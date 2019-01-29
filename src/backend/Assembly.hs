@@ -10,6 +10,7 @@ data Value = Constant Integer
            | Register Reg 
            | Memory Reg (Maybe (Reg, Integer)) (Maybe Integer) (Maybe Type)
             --[r1 + r2*c1 + c2]
+            | Local Integer
     deriving (Eq,Ord)
 
 data Instruction = ADD Value Value
@@ -21,6 +22,7 @@ data Instruction = ADD Value Value
                  | AND Value Value
                  | OR Value Value
                  | XOR Value Value
+                 | INC Value
                  | SETZ Value
                  | JMP Value
                  | JZ Value
@@ -69,6 +71,7 @@ instance Show Value where
     show (Constant i) = show i
     show (Label s) = s
     show (Register r) = show r
+    show (Local i) = "$+"++show i
     show (Memory r mm mo _) =
         let m = case mm of {Nothing -> ""; Just (r,i) -> " + "++show r ++ "*"++show i}
             o = case mo of 
