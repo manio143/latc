@@ -227,12 +227,29 @@ emitI stmts (regInts, stackSize, vmap) = do
         tell [X.SetLabel l]
     emitStmt (i, Jump l) = do
         tell [X.JMP (X.Label l)]
-    emitStmt (i, JumpCmp cmp l vl vr) = do
+    emitStmt (i, JumpCmp cmp lbl vl vr) = do
         let vlc = valueConv vl
         let vrc = valueConv vr
-        --TODO: use test when comparing to 0
-        --      and make sure vlc is not constant
-        tell [X.CMP vlc vrc, makeJump cmp l]
+        (l,r,c) <- case (vlc, vrc) of
+            (X.Constant i, X.Register _) ->
+                return (vrc, vlc, reverseSide cmp)
+            (X.Constant i, X.Memory _ _ _ _) ->
+                return (vrc, vlc, reverseSide cmp)
+            (X.Memory _ _ _ (Just t), X.Memory _ _ _ _) -> do
+                tell [X.MOV (X.Register $ X.regSize t X.RBX) vlc]
+                return (X.Register $ X.regSize t X.RBX, vrc, cmp)
+            (_, _) -> return (vlc, vrc, cmp)
+
+        if r == X.Constant 0 && (cmp == Eq || cmp == Ne) then 
+            tell [X.TEST l l, makeJump cmp lbl]
+        else tell [X.CMP l r, makeJump cmp lbl]
+
+        where
+            reverseSide Ge = Le
+            reverseSide Le = Ge
+            reverseSide Gt = Lt
+            reverseSide Lt = Gt
+            reverseSide op = op
 
 
     prepareCall free = do
