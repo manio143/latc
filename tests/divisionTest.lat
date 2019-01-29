@@ -1,0 +1,28 @@
+int main() {
+    int a = 4; //readInt();
+    int b = 2; //readInt();
+
+    Podziel w = new Podziel;
+    printInt(w.operator(a,b));
+
+    return 0;
+}
+
+class Podziel {
+    int operator(int a, int b) {
+        printInt(a);
+        printInt(b);
+        print(this);
+	int wynik = a/b;               // to nie działa
+        //int wynik = opperator(a,b);  // to działa
+        return wynik;
+    }
+}
+
+int opperator(int a, int b) {
+        printInt(a);
+        printInt(b);
+        printInt(55555);
+        int wynik = a/b;           // a tu działa!
+        return wynik;
+}

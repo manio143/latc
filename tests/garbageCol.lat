@@ -1,0 +1,21 @@
+  class A {
+    int pole1;
+    int pole2;
+  }
+
+  int main() {
+    A a = new A;
+    A b;
+    int i = 0;
+    while(i < 1024*1024 * 10) {
+        b = new A;
+        b.pole1 = a.pole1 + 1;
+        a.pole2 = a.pole2 + 1;
+        b.pole2 = a.pole2 + 1;
+        a = b;
+        i++;
+    }
+    printInt(b.pole2);
+    printString("Done");
+    return 0;
+  }
