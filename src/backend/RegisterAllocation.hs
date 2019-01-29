@@ -30,7 +30,7 @@ allocateRegisters sst args regMap = (fstt computedState, stackSize, valMap)
     intervals = informationToIntervals sst
     stmtIntervals = filter (\(n,_,_) -> not $ elem n argNames) intervals
     
-    numberOfStatements = foldl1 max $ map thrd intervals
+    numberOfStatements = fromIntegral $ length sst
 
     thrd (_,_,x) = x
     fstt (x,_,_) = x

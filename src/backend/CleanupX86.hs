@@ -5,6 +5,8 @@ import Assembly
 cleanupX86 :: Program -> Program
 cleanupX86 (Program is) = Program (stackOptim $ clean is)
 
+clean (MOV bx x : MOV y bx' : is) | bx == bx' && isTemp bx && (isReg x || isReg y) = clean (MOV y x : is)
+
 clean (MOV bx x : CMP bx' y : is) | bx == bx' && isTemp bx = clean (CMP x y : is)
 
 clean (MOV x bx : TEST bx' bx'' : is) | bx == bx' && bx == bx'' && isTemp bx = clean (MOV x bx : TEST x x : is)

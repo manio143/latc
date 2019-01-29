@@ -205,7 +205,7 @@ emitI stmts (regInts, stackSize, vmap) = do
                 emitExpr (Just t) e tgt i
             Array a idx -> do
                 emitExpr (Just t) e (X.Register (X.regSize t X.R12)) i
-                emitCall (Just t) (X.Label "__getelementptr") [Var a] (X.Register X.R13) i
+                emitCall (Just t) (X.Label "__getelementptr") [Var a, idx] (X.Register X.R13) i
                 tell [X.MOV (X.Memory X.R13 Nothing Nothing Nothing) (X.Register (X.regSize t X.R12))]
             Member m off -> do
                 emitExpr (Just t) e (X.Register (X.regSize t X.R12)) i
