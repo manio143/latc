@@ -12,17 +12,25 @@ checkReturnPaths (Program a defs) = do
     return (Program a ndefs)
 
 checkD (FunctionDef a (VoidT tp) n as b) = do
-    nb <- checkVoidBlock b
+    let rb = removePastReturn b
+    nb <- checkVoidBlock rb
     return (FunctionDef a (VoidT tp) n as nb)
-checkD f@(FunctionDef _ _ _ _ b) = checkFB b >> return f
+checkD (FunctionDef a t n as b) = do
+    let rb = removePastReturn b
+    checkFB rb
+    return (FunctionDef a t n as rb)
 checkD (ClassDef a c p decls) = do
     ndecls <- mapM checkDecl decls
     return (ClassDef a c p ndecls)
 
 checkDecl (MethodDecl a (VoidT tp) n as b) = do
-    nb <- checkVoidBlock b
+    let rb = removePastReturn b
+    nb <- checkVoidBlock rb
     return (MethodDecl a (VoidT tp) n as nb)
-checkDecl m@(MethodDecl _ _ _ _ b) = checkFB b >> return m
+checkDecl (MethodDecl a t n as b) = do
+    let rb = removePastReturn b
+    checkFB rb
+    return (MethodDecl a t n as rb)
 checkDecl d = return d
 
 checkFB :: Block Position -> InnerMonad ()
@@ -58,3 +66,13 @@ checkVoidBlock b@(Block a stmts) =
         case last stmts of
             ReturnVoid _ -> return b
             _ -> return (Block a (stmts ++ [ReturnVoid BuiltIn]))
+
+removePastReturn (Block a stmts) = (Block a (firstUntilReturn stmts))
+    where
+        firstUntilReturn (h:t) = case h of
+                            ReturnVoid _ -> [h]
+                            ReturnValue _ _ -> [h]
+                            BlockStmt a b -> BlockStmt a (removePastReturn b) : firstUntilReturn t
+                            _ -> h : firstUntilReturn t
+        firstUntilReturn [] = []
+
