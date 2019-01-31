@@ -96,7 +96,7 @@ st ByteT = 0x01
 st Reference = 0x08
 
 emitI :: [(Integer, Stmt)] -> RegState -> Writer [X.Instruction] ()
-emitI stmts (regInts, stackSize, vmap) = do
+emitI stmts (regInts, stackSize, umap) = do
     entry stackSize
     loadArgs vmap
     body stmts
@@ -123,6 +123,14 @@ emitI stmts (regInts, stackSize, vmap) = do
 
     r12 = any arrayOrObject $ map snd stmts
     r13 = any arrayOrObjectAssignment $ map snd stmts
+
+    vmap = map fixArgPos umap
+      where
+        diff = (val r12) + (val r13)
+        val b = if b then 0 else 8
+        fixArgPos (n, vs) = (n, map fixMem vs)
+        fixMem (X.Memory r f (Just o) t) | o > 0 = (X.Memory r f (Just (o-diff)) t)
+        fixMem m = m
 
     loadArgs vmap = do
         let argsToLoad = filter (\(n,vals) -> length vals == 2) vmap
